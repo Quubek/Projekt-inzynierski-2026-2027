@@ -1,6 +1,8 @@
 # Projekt-inzynierski-2026-2027
 
-Projekt inżynierski: system analizy logów, wykrywania anomalii oraz generowania raportów z wykorzystaniem NLP i lokalnego modelu językowego.
+Projekt inżynierski: Zastosowanie modelu przetwarzania języka naturalnego (NLP) do
+inteligentnej analizy logów systemowych i automatyzacji
+raportowania incydentów bezpieczeństwa
 
 ## Zespół
 
