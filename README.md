@@ -116,3 +116,13 @@ Weryfikacja obejmie testy API, parsowania, zapisu i eksportu, porównanie skutec
 - Eksport raportów do PDF.
 - Integracja z demonstracyjnym środowiskiem SIEM.
 - Obsługa kolejnych rodzajów logów.
+
+## Dokumentacja researchu
+
+Notatki z etapu koncepcyjnego, obejmujące ustalenia, źródła i kwestie do dalszej weryfikacji:
+
+- [JB — API, Drain3 i baza danych](docs/research/JB-api-drain3-baza.md)
+- [JF — raporty LLM, dashboard, Docker Compose i SIEM](docs/research/JF-llm-dashboard-docker-siem.md)
+- [HD — detekcja anomalii, dane i metryki](docs/research/HD-detekcja-dane-metryki.md)
+
+[Spis notatek i wspólne ustalenia](docs/research/README.md). Dokumenty opisują research, a nie wyniki implementacji lub testów działającego systemu.
