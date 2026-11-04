@@ -1,0 +1,8 @@
+{
+  "log_format": "hdfs",
+  "logs": [
+    "081109 203518 143 INFO dfs.DataNode$DataXceiver: Receiving block blk_-1608999687919862906 src: /10.0.0.1:50010 dest: /10.0.0.2:50010",
+    "081109 203519 145 INFO dfs.DataNode$DataXceiver: Receiving block blk_123456789 src: /10.0.0.3:50010 dest: /10.0.0.4:50010",
+    "081109 203520 143 INFO dfs.DataNode$DataXceiver: Received block blk_-1608999687919862906 of size 67108864 from /10.0.0.1"
+  ]
+}

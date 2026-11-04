@@ -1,0 +1,7 @@
+{
+  "log_format": "ssh",
+  "logs": [
+    "Nov 4 10:14:03 server01 sshd[1234]: Failed password for admin from 192.0.2.10 port 51234 ssh2",
+    "Nov 4 10:14:05 server01 sshd[1235]: Failed password for root from 192.0.2.20 port 51235 ssh2"
+  ]
+}
