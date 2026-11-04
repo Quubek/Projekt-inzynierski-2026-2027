@@ -1,5 +1,12 @@
 # Projekt-inzynierski-2026-2027
 
+## Prototyp API JB — etap 2
+
+Przyjmowanie i walidacja logów, normalizacja HDFS/SSH, szablony Drain3 oraz
+grupowanie HDFS po BlockID są dostępne w pierwszej wersji API.
+Integracja modelu detekcji i automatyczne generowanie raportów pozostają do wykonania.
+[Uruchomienie, demonstracja i ograniczenia API](docs/jb-api-etap2.md).
+
 Projekt inżynierski: Zastosowanie modelu przetwarzania języka naturalnego (NLP) do
 inteligentnej analizy logów systemowych i automatyzacji
 raportowania incydentów bezpieczeństwa
