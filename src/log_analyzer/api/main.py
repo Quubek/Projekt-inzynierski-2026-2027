@@ -1,4 +1,4 @@
-"""Uruchomienie: python -m uvicorn log_analyzer.api.main:app --app-dir src."""
+"""Uruchomienie:  python -m uvicorn log_analyzer.api.main:app --app-dir src."""
 
 import json
 from uuid import UUID
