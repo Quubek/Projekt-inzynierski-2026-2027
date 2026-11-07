@@ -84,6 +84,44 @@ właściwym identyfikatorem:
 
 Odczyt wymaga istniejącej bazy, ale nie wymaga uruchomionej Ollamy.
 
+## Uruchomienie przez Docker Compose
+
+Przygotowana konfiguracja korzysta z Docker Desktop na Windowsie
+z kontenerami Linux. Ollama i model `qwen3:4b-instruct` pozostają
+na komputerze gospodarza. Uruchom Docker Desktop i Ollamę.
+
+Z głównego folderu projektu sprawdź konfigurację:
+
+```powershell
+docker compose config
+```
+
+Zbuduj obraz i uruchom generator:
+
+```powershell
+docker compose run --rm --build reporting
+```
+
+Generator kończy działanie po zapisaniu i odczytaniu raportu.
+Opcja `--rm` usuwa zakończony kontener. Folder `runtime` jest
+podłączony do `/app/runtime`, dlatego raporty pozostają w tej samej
+lokalnej bazie po usunięciu kontenera.
+
+Aby odczytać raport z nowego kontenera, zastąp `TWOJE_ID`
+identyfikatorem zapisanym w bazie:
+
+```powershell
+docker compose run --rm reporting python -m log_analyzer.reporting.odczytaj_raport TWOJE_ID
+```
+
+Odczyt nie wymaga uruchomionej Ollamy. Przy korzystaniu z Dockera
+nie trzeba aktywować lokalnej `.venv` ani ustawiać `PYTHONPATH`.
+Po zmianach kodu ponownie zbuduj obraz, używając opcji `--build`.
+
+Adres Ollamy jest odczytywany ze zmiennej `OLLAMA_URL`.
+Domyślnie wynosi `http://localhost:11434`, a Compose ustawia
+`http://host.docker.internal:11434` do połączenia z Windows.
+
 ## Pliki modułu
 
 - `src/log_analyzer/reporting/ollama_klient.py` —
@@ -92,6 +130,9 @@ Odczyt wymaga istniejącej bazy, ale nie wymaga uruchomionej Ollamy.
   odczyt raportu po identyfikatorze.
 - `src/log_analyzer/storage/sqlite_repo.py` —
   tworzenie tabeli, zapis i odczyt danych.
+- `docker/Dockerfile.reporting` — środowisko kontenera generatora.
+- `compose.yaml` — konfiguracja uruchomienia i podłączenia bazy.
+- `.dockerignore` — pliki pomijane przy budowaniu obrazu.
 
 ## Dotychczasowa weryfikacja ręczna
 
@@ -100,7 +141,8 @@ Potwierdzono:
 - zgodność raportu odczytanego z bazy z zapisanym;
 - odczyt wcześniejszego raportu po zakończeniu generatora
   i wyłączeniu Ollamy;
-- czytelny komunikat przy próbie generowania z wyłączoną Ollamą.
+- czytelny komunikat przy próbie generowania z wyłączoną Ollamą;
+- generowanie, zapis i odczyt raportu w kontenerze Docker Compose.
 
 Obsługa pozostałych błędów wymaga osobnego sprawdzenia.
 

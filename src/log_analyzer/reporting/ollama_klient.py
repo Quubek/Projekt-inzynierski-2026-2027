@@ -1,5 +1,6 @@
 import json
 import sqlite3
+import os
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
@@ -71,7 +72,7 @@ def generuj_opis_zdarzen(zdarzenia: list[dict]) -> TrescRaportu:
         )
 
     client = Client(
-        host="http://localhost:11434",
+        host=os.getenv("OLLAMA_URL", "http://localhost:11434"),
         timeout=120.0,
     )
 
