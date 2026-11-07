@@ -1,0 +1,9 @@
+services:
+  reporting:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.reporting
+    environment:
+      OLLAMA_URL: http://host.docker.internal:11434
+    volumes:
+      - ./runtime:/app/runtime
