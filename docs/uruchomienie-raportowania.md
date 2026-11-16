@@ -3,8 +3,10 @@
 Moduł generuje raport na podstawie przykładowych zdarzeń,
 zapisuje go w SQLite i umożliwia odczyt po identyfikatorze.
 
-Na obecnym etapie zdarzenia są zdefiniowane w kodzie.
-Moduł nie jest jeszcze połączony z API ani detektorem anomalii.
+Generator CLI korzysta z przykładowych zdarzeń zdefiniowanych w kodzie.
+Można też wygenerować raport z grupy logów przesłanych przez API i dashboard —
+opisuje to [instrukcja dashboardu](uruchomienie-dashboardu.md).
+Detektor anomalii nie jest jeszcze podłączony.
 
 ## Wymagania
 
@@ -125,7 +127,9 @@ Domyślnie wynosi `http://localhost:11434`, a Compose ustawia
 ## Pliki modułu
 
 - `src/log_analyzer/reporting/ollama_klient.py` —
-  generowanie raportu, modele Pydantic i przykład uruchomienia.
+  generowanie raportu i przykład uruchomienia.
+- `src/log_analyzer/contracts.py` — wspólne modele Pydantic.
+- `src/log_analyzer/reporting/service.py` — raportowanie grupy z zapisanej analizy API.
 - `src/log_analyzer/reporting/odczytaj_raport.py` —
   odczyt raportu po identyfikatorze.
 - `src/log_analyzer/storage/sqlite_repo.py` —

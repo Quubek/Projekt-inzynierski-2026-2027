@@ -5,7 +5,27 @@
 Przyjmowanie i walidacja logów, normalizacja HDFS/SSH, szablony Drain3 oraz
 grupowanie HDFS po BlockID są dostępne w pierwszej wersji API.
 Integracja modelu detekcji i automatyczne generowanie raportów pozostają do wykonania.
-[Uruchomienie, demonstracja i ograniczenia API](docs/jb-api-etap2.md).
+[Uruchomienie API i dashboardu](docs/uruchomienie-dashboardu.md).
+
+## Historia raportów — dashboard JF
+
+Dashboard Streamlit ma stronę główną z kafelkami i osobne widoki historii
+oraz szczegółów raportu. Udostępnia filtrowanie, podgląd zdarzeń źródłowych
+i pobieranie JSON. Widok analizy przyjmuje tekst lub plik z logami i korzysta
+z parsera API dla SSH/HDFS. Po parsowaniu można ręcznie wygenerować raport
+z wybranej grupy lub wykrycia i otworzyć go w szczegółach.
+Dodano trzy reguły HDFS oraz osobny widok wykryć z uzasadnieniami i źródłami.
+Priorytety reguł są wstępne; model ML czeka na podłączenie kodu HD.
+Widok oceny modeli prezentuje zapisane metryki i macierz pomyłek, oznaczając
+wyniki z danych syntetycznych.
+Dane zapisanych raportów pobiera przez API z SQLite.
+Uruchomienie: `docker compose up --build api dashboard`, następnie
+otwórz <http://localhost:8501>. Ollama jest potrzebna do generowania
+nowych raportów; przeglądanie zapisanych raportów działa niezależnie.
+
+[Instrukcja dashboardu](docs/uruchomienie-dashboardu.md) ·
+[Integracja modułów i wyniki HD](docs/integracja-modulow.md) ·
+[Generowanie i odczyt raportów](docs/uruchomienie-raportowania.md)
 
 Projekt inżynierski: Zastosowanie modelu przetwarzania języka naturalnego (NLP) do
 inteligentnej analizy logów systemowych i automatyzacji
