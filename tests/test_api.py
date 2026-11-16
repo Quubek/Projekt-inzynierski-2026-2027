@@ -7,6 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from log_analyzer.api.main import app
+from log_analyzer.contracts import MAX_LOG_LINES
 from log_analyzer.storage import sqlite_repo
 
 client = TestClient(app)
@@ -47,7 +48,7 @@ def test_ssh_fields():
 @pytest.mark.parametrize("payload", [
     {}, {"logs": []}, {"logs": [""]}, {"logs": ["   "]},
     {"logs": [123]}, {"logs": ["x"], "log_format": "unknown"},
-    {"logs": ["x"]}, {"logs": ["x"] * 1001},
+    {"logs": ["x"]}, {"logs": ["x"] * (MAX_LOG_LINES + 1)},
     {"logs": ["081332 203518 143 INFO dfs.DataNode: bad date"]},
 ])
 def test_invalid_input(payload):
@@ -59,6 +60,19 @@ def test_unique_event_ids_between_requests():
     first = client.post("/api/v1/analyze", json=payload).json()
     second = client.post("/api/v1/analyze", json=payload).json()
     assert first["events"][0]["event_id"] != second["events"][0]["event_id"]
+
+
+def test_two_thousand_hdfs_lines_are_not_truncated_or_split():
+    payload = json.loads((SAMPLES / "hdfs_request.json").read_text(encoding="utf-8"))
+    line = payload["logs"][0]
+    response = client.post("/api/v1/analyze", json={"logs": [line] * 2000, "log_format": "hdfs"})
+    assert response.status_code == 200
+    analysis = response.json()
+    assert len(analysis["events"]) == 2000
+    assert len(analysis["groups"]) == 1
+    assert len(analysis["groups"][0]["event_ids"]) == 2000
+    assert len({event["event_id"] for event in analysis["events"]}) == 2000
+    assert client.get(f"/api/v1/analyses/{analysis['analysis_id']}").json() == analysis
 
 
 def test_read_existing_jf_report(tmp_path, monkeypatch):

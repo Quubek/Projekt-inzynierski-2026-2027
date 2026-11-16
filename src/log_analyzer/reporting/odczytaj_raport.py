@@ -1,7 +1,7 @@
 import argparse
 from uuid import UUID
 
-from log_analyzer.reporting.ollama_klient import RaportZdarzen
+from log_analyzer.contracts import RaportZdarzen
 from log_analyzer.storage.sqlite_repo import (
     SCIEZKA_BAZY,
     pobierz_raport,

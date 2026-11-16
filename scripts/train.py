@@ -26,13 +26,18 @@ def metrics(part):
     pred = clf.predict(vec.transform(part["text"]))
     p, r, f, _ = precision_recall_fscore_support(part["y"], pred, average="binary", zero_division=0)
     return {"precision": round(p, 4), "recall": round(r, 4), "f1": round(f, 4),
-            "confusion_matrix": confusion_matrix(part["y"], pred).tolist(), "n": len(part)}
+            "confusion_matrix": confusion_matrix(part["y"], pred, labels=[0, 1]).tolist(), "n": len(part)}
 
 results = {"model": "tfidf-logreg-v1", "date": datetime.date.today().isoformat(),
+           "dataset": os.getenv("DATASET_NAME", "Nie podano"),
+           "data_source": os.getenv("DATA_SOURCE", "unknown"), "class_labels": [0, 1],
            "split": {"train": len(tr), "val": len(val), "test": len(te)},
            "validation": metrics(val)}
 if "--test" in sys.argv:
     results["test"] = metrics(te)
 joblib.dump((vec, clf), "models/baseline.joblib")
-json.dump(results, open("results.json", "w"), indent=2)
+results_path = os.getenv("EVALUATION_RESULTS_PATH", "runtime/evaluation/results.json")
+os.makedirs(os.path.dirname(os.path.abspath(results_path)), exist_ok=True)
+with open(results_path, "w", encoding="utf-8") as results_file:
+    json.dump(results, results_file, indent=2, ensure_ascii=False)
 print(json.dumps(results, indent=2))
