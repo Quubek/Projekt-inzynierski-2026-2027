@@ -1,7 +1,7 @@
 # Artefakt modelu ML
 
-Compose montuje ten katalog do API tylko do odczytu. Po treningu w Colabie
-skopiuj zgodny artefakt pod nazwą:
+Compose montuje ten katalog do API tylko do odczytu. Wersjonowany artefakt
+modelu znajduje się pod nazwą:
 
 ```text
 models/baseline.joblib
@@ -31,5 +31,5 @@ reports/training_metrics_20261117_123831.json
 
 API automatycznie odczyta najnowszy `training_metrics_*.json` z `reports/`.
 Plik wyników nie jest potrzebny do predykcji. Sam artefakt `baseline.joblib`
-nie zawiera Precision/Recall/F1 ani etykiet testowych. Nie commituj wag modelu
-ani dużych zbiorów treningowych.
+nie zawiera Precision/Recall/F1 ani etykiet testowych. Nie dodawaj dużych
+zbiorów treningowych ani podziałów danych do repozytorium.
