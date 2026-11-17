@@ -51,8 +51,13 @@ def render_analysis_result(result: AnalysisResponse) -> None:
         f"Zdarzenia: {len(result.events)} · WARN: {levels['WARN']} · Komponenty: "
         f"{len({event.component for event in result.events})} · Grupy: {len(result.groups)} · Wykrycia: {len(result.findings)}"
     )
+    detection_text = {
+        "not_configured": "Model ML: niepodłączony.",
+        "completed": "Model ML ocenił grupy HDFS.",
+        "partial": "Model ML ocenił tylko część grup; niektóre cechy były nieznane.",
+    }[result.detection_status]
     st.info(
-        "Przetwarzanie zakończono. Model ML: niepodłączony. "
+        "Przetwarzanie zakończono. " + detection_text + " "
         + ("Reguły HDFS zostały sprawdzone. " if result.rules_status == "completed" else "Reguły HDFS nie dotyczą tego formatu. ")
         + "Wynik nie rozstrzyga, czy doszło do awarii lub ataku."
     )
@@ -82,7 +87,10 @@ def render_analysis_result(result: AnalysisResponse) -> None:
                 "Grupa": group.group_id, "Liczba zdarzeń": len(group.event_ids),
                 "Pierwszy dostępny czas": group_time_bounds([by_id[eid] for eid in group.event_ids])[0],
                 "Ostatni dostępny czas": group_time_bounds([by_id[eid] for eid in group.event_ids])[1],
-                "Ocena ML": "Nie oceniono",
+                "Ocena ML": (
+                    f"{group.ml_prediction} · {group.ml_score:.3f}"
+                    if group.ml_prediction and group.ml_score is not None else "Nie oceniono"
+                ),
             } for group in result.groups], hide_index=True, width="stretch")
         else:
             st.caption("Dla tych wpisów nie utworzono grup zdarzeń.")

@@ -1,4 +1,7 @@
 pandas
 numpy
-scikit-learn
-joblib
+scikit-learn==1.6.1
+joblib==1.6.0
+drain3==0.9.11
+pydantic>=2.9,<3
+tqdm

@@ -65,7 +65,7 @@ def render_findings() -> None:
                 st.session_state["finding_page"] = 1
             page = st.number_input("Strona", min_value=1, max_value=pages, step=1, key="finding_page")
             history = api.findings(limit=25, offset=(page - 1) * 25, **params) if page > 1 else overview
-        st.caption(f"Znaleziono: {history.total}. Priorytety reguł są wstępne; model ML nie jest podłączony.")
+        st.caption(f"Znaleziono: {history.total}. Priorytety reguł są wstępne; predykcje ML są oznaczone źródłem Model ML.")
         table = st.dataframe([{
             "Priorytet": PRIORITIES[item.priority], "Wskazanie": finding_title(item),
             "Węzeł": item.node or "Nie ustalono", "Zdarzenia": len(item.event_ids),
@@ -98,7 +98,10 @@ def render_finding_page() -> None:
         if finding.priority_is_provisional:
             st.warning("Priorytet jest wstępny. Reguły i progi wymagają walidacji; wskazanie nie potwierdza incydentu.")
         render_finding_rules(finding)
-        st.caption(f"Wersja reguł: {finding.rules_version} · Węzeł: {finding.node or 'Nie ustalono'}")
+        if finding.source == "ml":
+            st.caption(f"Wersja modelu: {finding.model_version or 'nieznana'} · Grupa: {finding.node or 'BlockID'}")
+        else:
+            st.caption(f"Wersja reguł: {finding.rules_version} · Węzeł: {finding.node or 'Nie ustalono'}")
         st.caption(f"Ocena modelu: {finding.score * 100:.1f}/100" if finding.score is not None else "Ocena modelu ML: niedostępna")
         if finding.time_from:
             st.text(f"Czas: {finding.time_from} → {finding.time_to}")

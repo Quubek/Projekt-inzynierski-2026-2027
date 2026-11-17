@@ -75,7 +75,9 @@ Motyw aplikacji znajduje się w `.streamlit/config.toml`.
   Puste wiersze są pomijane. Błędy wejścia lub parsera są pokazywane użytkownikowi.
 - Formularz korzysta z istniejącego `POST /api/v1/analyze`. Wynik zawiera
   uporządkowane zdarzenia, grupy, wskazania reguł HDFS oraz uwagi API.
-  Model ML nadal nie jest podłączony. Reguły wskazują zachowania do sprawdzenia.
+  Predykcje ML są wykonywane tylko po dodaniu zgodnego artefaktu
+  `models/baseline.joblib`; przygotowanie opisuje [instrukcja baseline'u](../scripts/README.md).
+  Reguły i predykcje wskazują zachowania do sprawdzenia.
 - W **Informacjach o źródle** można podać strefę IANA, np. `Europe/Warsaw` albo `UTC`,
   oraz rok dla logów SSH bez roku. Nie uzupełnia się ich strefą laptopa ani bieżącym rokiem.
   Jawna strefa z logu ma pierwszeństwo. Nieistniejący lub niejednoznaczny czas lokalny
@@ -97,14 +99,16 @@ Motyw aplikacji znajduje się w `.streamlit/config.toml`.
   w podglądzie i JSON. Zbyt długi pojedynczy wpis jest odrzucany, bez cichego przycinania.
   Kontekst Ollamy wynosi 8192 tokeny, a czas oczekiwania generatora — 120 sekund.
 - Brak połączenia z Ollamą lub błędna odpowiedź nie usuwa analizy ani nie zapisuje raportu.
-- Detekcja wymaga jeszcze funkcji predykcji HD i zgodnego przygotowania cech.
+- Predykcja ML HDFS jest dostępna po umieszczeniu zgodnego artefaktu
+  `models/baseline.joblib`; bez niego wynik ma status „niepodłączony”.
 - **Wykrycia i anomalie** pokazuje zapisane sygnały z reguł, sortowane według priorytetu,
   z filtrami po analizie, regule, priorytecie i nazwie/adresie węzła. Lista jest stronicowana po 25.
   Szczegóły pokazują uzasadnienie, wartości progów, oryginalne logi i pobieranie źródeł JSON.
   Można wygenerować raport wykrycia i wrócić do niego ze szczegółów raportu.
   Nie ma statusów ręcznego przeglądu typu „Nowe”/„Zamknięte”.
-- **Ocena modeli** odczytuje plik `runtime/evaluation/results.json` przez API.
-  Wyświetla Precision, Recall, F1 i macierz pomyłek oraz pochodzenie danych.
+- **Ocena modeli** odczytuje najnowszy `reports/training_metrics_*.json` albo
+  wskazany `EVALUATION_RESULTS_PATH` przez API. Wyświetla Precision, Recall, F1,
+  Accuracy, dostępne ROC AUC/AP, macierz pomyłek oraz pochodzenie danych.
   Brak pliku daje pusty widok, a nie przykładowe metryki. Szczegóły w
   [instrukcji integracji](integracja-modulow.md).
 - Historia jest uporządkowana od najnowszego raportu, po 25 wpisów na stronie.

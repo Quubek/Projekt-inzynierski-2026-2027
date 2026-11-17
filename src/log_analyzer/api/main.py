@@ -1,6 +1,7 @@
 """Uruchomienie:  python -m uvicorn log_analyzer.api.main:app --app-dir src."""
 
 import json
+import os
 import sqlite3
 from datetime import datetime, timezone
 from uuid import UUID
@@ -16,6 +17,7 @@ from log_analyzer.contracts import (
     RaportZdarzen, ReportHistory,
 )
 from log_analyzer.evaluation import load_evaluation_results
+from log_analyzer.detection.model import model_is_available
 from log_analyzer.pipeline import analyze
 from log_analyzer.reporting import service as reporting_service
 from log_analyzer.reporting.ollama_klient import EmptyModelOutputError
@@ -26,7 +28,9 @@ app = FastAPI(title="Analiza logow - API JB", version="0.1.0")
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "detection": "not_configured", "rules": "hdfs-rules-v1", "reporting": "manual"}
+    model_path = os.getenv("DETECTION_MODEL_PATH")
+    detection = "configured" if model_path and model_is_available(model_path) else "not_configured"
+    return {"status": "ok", "detection": detection, "rules": "hdfs-rules-v1", "reporting": "manual"}
 
 
 @app.get("/api/v1/evaluation", response_model=EvaluationResults)

@@ -1,32 +1,26 @@
-"""Predykcja baseline'u HD dla gotowej kolumny Features, nie surowych logów."""
+"""Predykcja dla tekstu sesji BlockID lub tekstu zgodnego z modelem."""
 
-from functools import lru_cache
+import argparse
+import json
+import sys
 from pathlib import Path
 
-import joblib
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-
-@lru_cache(maxsize=2)
-def _load_model(path: str, modified_ns: int):
-    # Czas modyfikacji unieważnia cache po ponownym treningu w tym samym procesie.
-    vectorizer, classifier = joblib.load(path)
-    if list(classifier.classes_) != [0, 1]:
-        raise ValueError("Model musi rozpoznawać klasy 0 (normalne) i 1 (anomalia).")
-    return vectorizer, classifier
+from log_analyzer.detection.model import predict_features
 
 
 def predict(features: str, model_path: str | Path = "models/baseline.joblib") -> dict:
-    """Oczekuje dokładnie tej reprezentacji Features, na której uczono model."""
-    if not isinstance(features, str) or not features.strip():
-        raise ValueError("Predykcja wymaga niepustego tekstu z kolumny Features.")
-    path = Path(model_path).resolve()
-    vectorizer, classifier = _load_model(str(path), path.stat().st_mtime_ns)
-    vectors = vectorizer.transform([features])
-    if vectors.nnz == 0:
-        raise ValueError("Żadna cecha nie należy do słownika wytrenowanego modelu.")
-    return {
-        "is_anomaly": bool(classifier.predict(vectors)[0] == 1),
-        "score": float(classifier.predict_proba(vectors)[0, 1]),
-        "score_type": "anomaly_probability",
-        "model_version": "tfidf-logreg-v1",
-    }
+    return predict_features(features, model_path)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("features", help="tekst sesji BlockID zgodny z modelem")
+    parser.add_argument("--model", type=Path, default=Path("models/baseline.joblib"))
+    args = parser.parse_args()
+    print(json.dumps(predict(args.features, args.model), ensure_ascii=False, indent=2))
+
+
+if __name__ == "__main__":
+    main()
