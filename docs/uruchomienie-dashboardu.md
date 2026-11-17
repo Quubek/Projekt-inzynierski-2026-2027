@@ -72,6 +72,10 @@ Motyw aplikacji znajduje się w `.streamlit/config.toml`.
   Nowe wykrycia zapisują nazwę i opis użytej wersji reguły, aby historyczny raport zachował warunki analizy.
 - Nawigacja odbywa się przez kafelki, bez lewego panelu. W pozostałych
   widokach przycisk **Powrót do startu** znajduje się w lewym górnym rogu.
+- Menu techniczne Streamlit (w tym nagrywanie), przycisk wdrożenia oraz górny
+  wskaźnik aktywności są ukryte. Operacje pokazują statyczne komunikaty zamiast
+  kręcących ikon. Pasek faktycznego postępu przesyłania pliku pozostaje widoczny;
+  po przesłaniu przyjmuje wartość 100%, bez animacji nieokreślonego postępu.
 - Analiza logów umożliwia wklejenie tekstu lub przesłanie pliku UTF-8 `.log`/`.txt`.
   Wklejanie tekstu: wybierz SSH lub HDFS i kliknij **Sprawdź logi** (do 2 MiB tekstu).
 - Import pliku: wybierz **Prześlij plik**, ustaw źródło w formularzu i kliknij
@@ -114,9 +118,16 @@ Motyw aplikacji znajduje się w `.streamlit/config.toml`.
   Uwagi wynikają z braków danych; informacje o identyfikatorach Drain3 są w diagnostyce.
 - Wynik ostatniego parsowania pozostaje w sesji przy przechodzeniu między widokami.
   Błąd kolejnej próby usuwa poprzedni wynik, aby nie pomylić paczek danych.
-- Po parsowaniu wybierz grupę i kliknij **Generuj raport**, a następnie **Otwórz raport**.
-  API pobiera zdarzenia z zapisanej analizy, wywołuje Ollamę, waliduje i zapisuje raport.
-  Ręczny wybór grupy nie jest wynikiem detekcji anomalii.
+- Po parsowaniu w **Raporcie z wybranych grup zdarzeń** zaznacz jedną lub kilka
+  pozycji z listy **Grupy do opisania**. Każda pozycja pokazuje liczbę zdarzeń.
+  Pod listą widnieje liczba wybranych grup i unikalnych wpisów, jest też przycisk
+  **Wyczyść wybór grup**. Kliknij **Generuj wspólny raport**, a następnie **Otwórz raport**.
+  API sprawdza przynależność wszystkich grup do zapisanej analizy i pobiera ich
+  źródła. Ten sam identyfikator wpisu jest uwzględniany tylko raz; identyczne teksty
+  z różnych zdarzeń pozostają osobnymi wpisami. Kolejność źródeł odpowiada analizie.
+  Wybór jest zachowywany przy powrocie do analizy. Zmiana kolejności wybranych grup
+  nie powoduje ponownego generowania tej samej kombinacji w bieżącej sesji.
+  Ręczny wybór nie jest wynikiem detekcji i nie potwierdza jednego incydentu.
 - Wejście LLM obejmuje do 20 oryginalnych przykładów i 6000 bajtów JSON danych wejściowych.
   Nie powiela szablonu ani listy bloków z pełnego obiektu zdarzenia.
   Większe zestawy są agregowane, z jawną listą przykładów i liczbą pominiętych oryginałów.
@@ -144,6 +155,10 @@ Motyw aplikacji znajduje się w `.streamlit/config.toml`.
 - Liczniki dotyczą całego wyniku filtrowania, a nie tylko widocznej strony.
 - Zaznacz wiersz i kliknij **Otwórz raport**, aby przejść do osobnego ekranu.
 - Szczegóły mają zakładki: Podsumowanie, Zdarzenia źródłowe i Dane raportu.
+- Metadane wspólnego raportu zawierają wszystkie `group_ids` oraz dostępne `hosts`.
+  Przy wielu hostach `host` pozostaje pusty, a podgląd pokazuje „Wiele hostów”.
+  Filtr historii odnajduje raport po każdym jego znanym hoście. Wpisy bez hosta
+  są liczone osobno, bez przypisywania im nazwy innego źródła.
 - W nowych raportach zakładka Podsumowanie ma stałe sekcje: Obserwacja,
   Powód wskazania, Ograniczenia oceny i Zalecane sprawdzenia. Zalecenia są numerowane przez UI.
   Starsze raporty zachowują oryginalne podsumowanie i rekomendację.
@@ -184,9 +199,11 @@ Odczyt szczegółów: `GET /api/v1/reports/{report_id}`.
   `analysis_id`, `event_count`, `finding_count`; pełny wynik pobiera się osobnym GET.
   Przekroczenie rozmiaru: HTTP 413; błędne dane, kodowanie lub liczba wpisów: HTTP 422.
 - `GET /api/v1/analyses/{analysis_id}` — odczytuje zapisaną analizę.
-- `POST /api/v1/analyses/{analysis_id}/reports` — przyjmuje `{"group_id": "..."}`
-  albo `{"finding_id": "UUID"}` (dokładnie jedno źródło)
-  i zwraca zapisany raport (HTTP 201). Wymaga Ollamy.
+- `POST /api/v1/analyses/{analysis_id}/reports` — przyjmuje `{"group_ids": ["...", "..."]}`,
+  starsze `{"group_id": "..."}` albo `{"finding_id": "UUID"}` (dokładnie jedno źródło).
+  Lista grup musi być niepusta, bez powtórzonych identyfikatorów, do 10 000 pozycji.
+  Nieznana grupa odrzuca całą operację przed wywołaniem Ollamy. Endpoint
+  zwraca zapisany raport (HTTP 201). Wymaga Ollamy.
 - `GET /api/v1/findings` — stronicowana lista, filtry: `analysis_id`, `priority`, `rule_id`, `query`.
 - `GET /api/v1/findings/{finding_id}` — szczegóły zapisanego wskazania.
 - `GET /api/v1/evaluation` — odczytuje wyniki eksperymentów HD.

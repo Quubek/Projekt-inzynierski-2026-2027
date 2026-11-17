@@ -2,6 +2,7 @@
 
 import os
 import hashlib
+import json
 from collections import Counter
 from datetime import datetime
 from uuid import UUID
@@ -15,6 +16,7 @@ from log_analyzer.dashboard import api_client
 from log_analyzer.dashboard.api_client import ReportsApiError
 from log_analyzer.dashboard.navigation import navigate
 from log_analyzer.dashboard.presentation import EVENT_TYPES, event_time
+from log_analyzer.dashboard.feedback import working_message
 from log_analyzer.parsing.addresses import addresses_for_event, all_addresses
 
 
@@ -204,22 +206,34 @@ def render_event_details(event):
 
 def render_group_reporting(result: AnalysisResponse) -> None:
     with st.container(border=True):
-        st.subheader("Raport z grupy zdarzeń")
+        st.subheader("Raport z wybranych grup zdarzeń")
         st.caption(
             "Ręczny wybór grupy nie oznacza wykrycia anomalii. "
             "Generowanie wymaga uruchomionej Ollamy i może potrwać do dwóch minut."
         )
-        group = st.selectbox(
-            "Grupa do opisania", options=[item.group_id for item in result.groups],
-            key=f"report_group_{result.analysis_id}",
+        choices = {group.group_id: group for group in result.groups}
+        selection_key = f"report_groups_{result.analysis_id}"
+        saved_key = f"saved_report_groups_{result.analysis_id}"
+        if selection_key not in st.session_state:
+            st.session_state[selection_key] = st.session_state.get(saved_key, list(choices)[:1])
+        selected = st.multiselect(
+            "Grupy do opisania", options=list(choices), key=selection_key,
+            format_func=lambda group_id: f"{group_id} — zdarzenia: {len(choices[group_id].event_ids)}",
+            placeholder="Wybierz jedną lub kilka grup",
         )
-        key = f"{result.analysis_id}:{group}"
+        st.session_state[saved_key] = selected.copy()
+        st.button("Wyczyść wybór grup", key="clear_report_groups", disabled=not selected,
+                  on_click=lambda: st.session_state.update({selection_key: [], saved_key: []}))
+        event_ids = {event_id for group_id in selected for event_id in choices[group_id].event_ids}
+        st.caption(f"Wybrano grupy: {len(selected)} · Unikalne zdarzenia: {len(event_ids)}")
+        st.caption("Ten sam wpis należący do kilku grup trafi do raportu tylko raz. Wspólny wybór grup nie potwierdza jednego incydentu.")
+        key = f"{result.analysis_id}:groups:" + hashlib.sha256(json.dumps(sorted(selected)).encode()).hexdigest()
         saved_reports = st.session_state.setdefault("analysis_reports", {})
-        if st.button("Generuj raport", key="generate_group_report", disabled=key in saved_reports):
+        if st.button("Generuj wspólny raport", key="generate_group_report", disabled=not selected or key in saved_reports):
             try:
-                with st.spinner("Generowanie i zapisywanie raportu…"):
+                with working_message("Trwa generowanie i zapisywanie wspólnego raportu…"):
                     with api_client.ReportsApi(os.getenv("API_URL", "http://127.0.0.1:8000")) as api:
-                        report = api.generate_report(result.analysis_id, group)
+                        report = api.generate_report(result.analysis_id, group_ids=selected)
                 saved_reports[key] = str(report.report_id)
             except ReportsApiError as error:
                 st.error(str(error))
@@ -301,7 +315,7 @@ def render_analysis() -> None:
                 raise ValueError("Rok źródła musi być liczbą, np. 2026.")
             request = prepare_request(text, log_format, source_timezone=zone or None,
                                       source_year=int(year_text) if year_text else None, data_scope=scope)
-            with st.spinner("Przetwarzanie logów…"):
+            with working_message("Trwa przetwarzanie logów…"):
                 with api_client.ReportsApi(os.getenv("API_URL", "http://127.0.0.1:8000")) as api:
                     result = api.analyze(request)
             st.session_state["analysis_result"] = result.model_dump(mode="json")

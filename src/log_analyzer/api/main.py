@@ -109,6 +109,8 @@ def generate_report(analysis_id: UUID, request: GenerateReportRequest):
     try:
         if request.finding_id:
             return reporting_service.generate_finding_report(analysis, str(request.finding_id))
+        if request.group_ids is not None:
+            return reporting_service.generate_groups_report(analysis, request.group_ids)
         return reporting_service.generate_group_report(analysis, request.group_id)
     except TimeoutException as error:
         raise HTTPException(status_code=504, detail="Przekroczono czas oczekiwania na Ollamę.") from error

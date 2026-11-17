@@ -87,11 +87,15 @@ class ReportsApi:
         except ValidationError as error:
             raise ReportsApiError("Wynik analizy nie jest zgodny z kontraktem danych.") from error
 
-    def generate_report(self, analysis_id: str, group_id: str | None = None, *, finding_id: str | None = None) -> RaportZdarzen:
+    def generate_report(self, analysis_id: str, group_id: str | None = None, *, finding_id: str | None = None,
+                        group_ids: list[str] | None = None) -> RaportZdarzen:
+        payload = {key: value for key, value in {
+            "group_id": group_id, "group_ids": group_ids, "finding_id": finding_id,
+        }.items() if value is not None}
         try:
             return RaportZdarzen.model_validate(self._request(
                 "POST", f"/api/v1/analyses/{analysis_id}/reports",
-                payload={"finding_id": finding_id} if finding_id else {"group_id": group_id}, timeout=150.0,
+                payload=payload, timeout=150.0,
             ))
         except ValidationError as error:
             raise ReportsApiError("Wygenerowany raport nie ma wymaganej struktury.") from error

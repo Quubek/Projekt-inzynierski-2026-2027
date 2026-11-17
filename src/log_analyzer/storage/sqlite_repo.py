@@ -152,6 +152,12 @@ def pobierz_raport(report_id: str) -> str | None:
     return wynik[0]
 
 
+def _report_hosts_query(where=""):
+    return ("SELECT host AS name FROM raporty" + where +
+            " UNION SELECT listed_host.value AS name FROM raporty, "
+            "json_each(raport_json, '$.hosts') AS listed_host" + where)
+
+
 def pobierz_historie_raportow(
     *,
     limit: int = 25,
@@ -173,10 +179,11 @@ def pobierz_historie_raportow(
     conditions = []
     parameters = []
     if host is not None:
-        conditions.append("host = ?")
-        parameters.append(host)
+        conditions.append("(host = ? OR EXISTS (SELECT 1 FROM json_each(raport_json, '$.hosts') AS selected_host WHERE selected_host.value = ?))")
+        parameters.extend([host, host])
     if unknown_host:
-        conditions.append("host IS NULL")
+        conditions.append("(host IS NULL AND (coalesce(json_array_length(raport_json, '$.hosts'), 0) = 0 "
+                          "OR coalesce(json_extract(raport_json, '$.liczba_zdarzen_bez_hosta'), 0) > 0))")
     if report_id_query:
         conditions.append("instr(lower(report_id), lower(?)) > 0")
         parameters.append(report_id_query)
@@ -194,14 +201,17 @@ def pobierz_historie_raportow(
         connection.row_factory = sqlite3.Row
         connection.execute("BEGIN")
         totals = connection.execute(
-            "SELECT COUNT(*) AS total, COUNT(DISTINCT host) AS hosts FROM raporty" + where,
+            "SELECT COUNT(*) AS total FROM raporty" + where,
             parameters,
         ).fetchone()
         history["total"] = totals["total"]
-        history["known_host_count"] = totals["hosts"]
+        history["known_host_count"] = connection.execute(
+            "SELECT COUNT(*) FROM (" + _report_hosts_query(where) + ") WHERE name IS NOT NULL",
+            [*parameters, *parameters],
+        ).fetchone()[0]
         history["known_hosts"] = [
             row[0] for row in connection.execute(
-                "SELECT DISTINCT host FROM raporty WHERE host IS NOT NULL ORDER BY host"
+                "SELECT name FROM (" + _report_hosts_query() + ") WHERE name IS NOT NULL ORDER BY name"
             )
         ]
         latest = connection.execute(
@@ -222,6 +232,8 @@ def pobierz_historie_raportow(
             "report_id": row["report_id"],
             "created_at": row["created_at"],
             "host": row["host"],
+            "hosts": report.get("hosts", []),
+            "liczba_zdarzen_bez_hosta": report.get("liczba_zdarzen_bez_hosta", 0),
             "liczba_zdarzen": report.get("liczba_zdarzen"),
             "podsumowanie": report.get("tresc", {}).get("obserwacja") or report.get("tresc", {}).get("podsumowanie", ""),
         })

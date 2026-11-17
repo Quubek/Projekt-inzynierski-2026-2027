@@ -81,10 +81,7 @@ def generuj_raport(zdarzenia: list[dict], *, context: dict | None = None) -> Rap
 
     hosty = {zdarzenie.get("host") for zdarzenie in zdarzenia}
 
-    if len(hosty) != 1:
-        raise ValueError("Zdarzenia muszą dotyczyć jednego hosta.")
-
-    host = next(iter(hosty))
+    host = next(iter(hosty)) if len(hosty) == 1 else None
 
     czasy = [
         datetime.fromisoformat(zdarzenie["timestamp"])
@@ -105,6 +102,8 @@ def generuj_raport(zdarzenia: list[dict], *, context: dict | None = None) -> Rap
         created_at=datetime.now(timezone.utc),
         event_ids=event_ids,
         host=host,
+        hosts=sorted(value for value in hosty if value),
+        liczba_zdarzen_bez_hosta=sum(not event.get("host") for event in zdarzenia),
         liczba_zdarzen=len(zdarzenia),
         liczba_zdarzen_bez_czasu=len(zdarzenia) - len(czasy),
         czas_od=min(czasy) if czasy else None,

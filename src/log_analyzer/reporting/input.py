@@ -38,6 +38,8 @@ def prepare_report_input(events: list[dict], context: dict | None = None) -> Pre
         "event_types": dict(Counter(event.get("event_type") or "other" for event in events)),
         "components_top_10": dict(Counter(event.get("component") or "unknown" for event in events).most_common(10)),
         "events_without_utc": sum(not event.get("timestamp") for event in events),
+        "hosts_top_10": dict(Counter(event.get("host") or "unknown" for event in events).most_common(10)),
+        "events_without_host": sum(not event.get("host") for event in events),
     })
     if _size(payload) > MAX_REPORT_INPUT_BYTES:
         raise ValueError("Metadane raportu przekraczają limit wejścia LLM. Nie przycięto źródeł.")

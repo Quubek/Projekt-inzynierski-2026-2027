@@ -56,7 +56,7 @@ def test_analysis_report_history_roundtrip(ollama_client, log_format):
     assert report["generation_mode"] == "manual"
     assert report["tresc"]["schema_version"] == 2
     assert len(report["tresc"]["zalecenia"]) == 2
-    assert report["prompt_version"] == "log-report-v2"
+    assert report["prompt_version"] == "log-report-v3"
     messages = ollama_client.chat.call_args.kwargs["messages"]
     assert [message["role"] for message in messages] == ["system", "user"]
     assert json.loads(messages[1]["content"])["total_events"] == len(group["event_ids"])

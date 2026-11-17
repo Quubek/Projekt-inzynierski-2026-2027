@@ -12,6 +12,7 @@ from log_analyzer.dashboard.api_client import ReportsApiError
 from log_analyzer.dashboard.navigation import navigate
 from log_analyzer.dashboard.presentation import EVENT_TYPES, PRIORITIES, event_time
 from log_analyzer.dashboard.rule_help import render_finding_rules
+from log_analyzer.dashboard.feedback import working_message
 from log_analyzer.detection.catalog import RULE_NAMES, finding_rules, finding_title
 
 
@@ -124,7 +125,7 @@ def render_finding_page() -> None:
                            file_name=f"zrodla-{finding_id}.json", mime="application/json", on_click="ignore")
         reports = st.session_state.setdefault("finding_reports", {})
         if st.button("Generuj raport wykrycia", key="generate_finding_report", disabled=finding_id in reports):
-            with st.spinner("Generowanie raportu…"):
+            with working_message("Trwa generowanie i zapisywanie raportu…"):
                 with api_client.ReportsApi(os.getenv("API_URL", "http://127.0.0.1:8000")) as api:
                     report = api.generate_report(finding.analysis_id, finding_id=finding_id)
                 reports[finding_id] = str(report.report_id)

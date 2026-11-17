@@ -8,18 +8,22 @@
    Import nie przechodzi przez pamięć `st.file_uploader`; oba wejścia tworzą `AnalyzeRequest`.
 2. Parser JB normalizuje wpisy, wydobywa szablony Drain3 i tworzy grupy.
 3. API zapisuje wynik w tabeli `analizy` w `runtime/raporty.sqlite3`.
-4. Użytkownik wybiera grupę lub wskazanie reguły i uruchamia raport przez
-   `POST /api/v1/analyses/{analysis_id}/reports`, wysyłając `group_id` albo `finding_id`.
+4. Użytkownik wybiera jedną lub kilka grup albo wskazanie reguły/modelu i uruchamia raport przez
+   `POST /api/v1/analyses/{analysis_id}/reports`, wysyłając `group_ids` albo `finding_id`.
+   Starsze wywołania z pojedynczym `group_id` nadal działają.
 5. Serwis `reporting/service.py` odczytuje oryginalne zdarzenia grupy i wywołuje
    `generuj_raport` JF. Przeglądarka nie przekazuje własnych źródeł raportu.
 6. Generator wywołuje lokalną Ollamę, waliduje odpowiedź i zachowuje oryginalne logi.
 7. Raport trafia do SQLite; dashboard otwiera ten sam widok szczegółów co historia.
 
-Raport zawiera `analysis_id`, `group_id` i `generation_mode: "manual"`.
+Raport zawiera `analysis_id`, `group_ids` i `generation_mode: "manual"`.
+Przy jednej grupie zachowuje również `group_id`. Źródła wspólnych raportów są
+deduplikowane po identyfikatorze wpisu i zachowują kolejność analizy.
 Identyfikatory, host i czas pochodzą z danych, a nie z decyzji LLM.
-Brak czasu lub hosta pozostaje brakiem danych. Obecne grupy SSH dotyczą jednego hosta,
-a parser HDFS nie wyznacza hosta. Generator nadal wymaga jednej wartości pola `host`
-w grupie (może to być `null`).
+Brak czasu lub hosta pozostaje brakiem danych. Pojedyncza grupa SSH dotyczy jednego hosta,
+a parser HDFS nie wyznacza hosta. Wspólny raport może zawierać kilka hostów:
+zachowuje ich nazwy w `hosts`, liczbę wpisów bez hosta w `liczba_zdarzen_bez_hosta`,
+a pojedyncze `host` jest ustawiane wyłącznie, gdy wszystkie wpisy dotyczą tej samej wartości.
 
 Bez artefaktu `models/baseline.joblib` detekcja ML ma status `not_configured`.
 Po dodaniu zgodnego modelu API zapisuje wyniki ML obok reguł HDFS w `findings`.
@@ -36,7 +40,10 @@ Pełne oryginalne logi są w raporcie i bazie. LLM generuje obserwację, powód 
 listę ograniczeń i listę zaleceń, walidowane przez `OpisRaportu`;
 listę źródeł tworzy Python. Pojedynczy wpis, który nie mieści się w wejściu, nie jest przycinany.
 
-Wersja prompta `log-report-v2` definiuje role, zasady interpretacji i cztery sekcje treści.
+Wersja prompta `log-report-v3` zachowuje cztery sekcje i dodaje zasady ręcznego wyboru grup:
+wybór nie dowodzi jednego incydentu ani związku przyczynowego. Kontekst LLM obejmuje
+liczbę grup i podgląd do 10 identyfikatorów, aby metadane nie wyparły źródeł.
+Pełna lista grup pozostaje w zapisanym raporcie.
 Instrukcja systemowa i dane logów są oddzielnymi wiadomościami. Raport zapisuje wersję
 prompta i model, a `tresc.schema_version` wynosi 2. Odczyt wspiera również dawny format
 dwóch pól tekstowych, bez migracji istniejących zapisów w SQLite.

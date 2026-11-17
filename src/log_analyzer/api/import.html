@@ -73,7 +73,7 @@ byId('upload').onsubmit = event => {
     if (event.lengthComputable) byId('progress').value = event.loaded / event.total * 100;
   };
   xhr.upload.onload = () => {
-    byId('progress').removeAttribute('value');
+    byId('progress').value = 100;
     byId('cancel').hidden = true;
     status('Plik przesłany. Trwa sprawdzanie i zapisywanie analizy…');
   };
