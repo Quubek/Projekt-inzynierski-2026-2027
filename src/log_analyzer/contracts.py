@@ -130,12 +130,15 @@ class GenerateReportRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     group_id: str | None = Field(default=None, min_length=1, max_length=512)
+    group_ids: list[Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=512)]] | None = Field(default=None, min_length=1, max_length=10000)
     finding_id: UUID | None = None
 
     @model_validator(mode="after")
     def one_report_source(self):
-        if (self.group_id is None) == (self.finding_id is None):
-            raise ValueError("Wybierz dokładnie jedną grupę lub jedno wykrycie do raportowania.")
+        if sum(value is not None for value in (self.group_id, self.group_ids, self.finding_id)) != 1:
+            raise ValueError("Wybierz grupę, listę grup albo jedno wykrycie — dokładnie jedno źródło raportu.")
+        if self.group_ids is not None and len(set(self.group_ids)) != len(self.group_ids):
+            raise ValueError("Identyfikatory wybranych grup nie mogą się powtarzać.")
         return self
 
 
@@ -182,6 +185,9 @@ class RaportZdarzen(BaseModel):
     tresc: UstrukturyzowanaTrescRaportu | TrescRaportu
     analysis_id: str | None = None
     group_id: str | None = None
+    group_ids: list[str] = Field(default_factory=list)
+    hosts: list[str] = Field(default_factory=list)
+    liczba_zdarzen_bez_hosta: int = Field(default=0, ge=0)
     generation_mode: Literal["manual"] = "manual"
     finding: Finding | None = None
     czas_zrodlowy_od: str | None = None
@@ -197,6 +203,8 @@ class ReportSummary(BaseModel):
     report_id: UUID
     created_at: datetime
     host: str | None
+    hosts: list[str] = Field(default_factory=list)
+    liczba_zdarzen_bez_hosta: int = Field(default=0, ge=0)
     # Starsze wpisy mogą zawierać tylko podstawowe metadane.
     liczba_zdarzen: int | None = Field(default=None, ge=1)
     podsumowanie: str = ""

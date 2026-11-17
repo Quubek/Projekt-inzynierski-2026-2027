@@ -18,3 +18,14 @@ PRIORITIES = {
 
 def event_time(event):
     return event.timestamp or event.timestamp_local or event.timestamp_raw or "Brak danych"
+
+
+def report_host(report):
+    if report.host:
+        return report.host
+    if report.hosts:
+        label = f"Wiele hostów ({len(report.hosts)})" if len(report.hosts) > 1 else report.hosts[0]
+        if report.liczba_zdarzen_bez_hosta:
+            label += " + wpisy bez hosta"
+        return label
+    return "Brak danych"

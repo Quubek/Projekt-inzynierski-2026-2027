@@ -18,6 +18,7 @@ from log_analyzer.dashboard.rule_help import render_finding_rules, render_rule_l
 from log_analyzer.dashboard.rule_catalog import render_rule_catalog
 from log_analyzer.detection.catalog import finding_title
 from log_analyzer.dashboard.navigation import VIEWS, navigate, render_navigation
+from log_analyzer.dashboard.presentation import report_host
 
 
 FILTER_DEFAULTS = {
@@ -102,11 +103,13 @@ def render_report(report: RaportZdarzen) -> None:
     )
     st.caption(f"ID raportu: {report.report_id}")
     st.caption(
-        f"Host: {report.host or 'Brak danych'} · Zdarzenia: {report.liczba_zdarzen} · "
+        f"Host: {report_host(report)} · Zdarzenia: {report.liczba_zdarzen} · "
         f"Utworzono: {format_time(report.created_at)}"
     )
     if report.finding:
         render_finding_rules(report.finding)
+    elif report.group_ids:
+        st.caption(f"Ręczny wybór grup: {len(report.group_ids)}. Wspólny raport nie potwierdza jednego incydentu.")
     if report.llm_input_mode == "aggregated":
         st.info(f"LLM otrzymał agregaty wszystkich {report.liczba_zdarzen} zdarzeń i {len(report.llm_event_ids)} przykładów. "
                 f"Pozostałych {report.llm_omitted_events} wpisów nie przekazano w oryginalnej postaci. Pełne logi zachowano w źródłach raportu.")
@@ -145,7 +148,11 @@ def render_report(report: RaportZdarzen) -> None:
     with metadata:
         st.subheader("Metadane")
         st.text(f"Identyfikator: {report.report_id}")
-        st.text(f"Host: {report.host or 'Brak danych'}")
+        st.text(f"Host: {report_host(report)}")
+        if report.hosts:
+            st.text("Hosty źródłowe: " + ", ".join(report.hosts))
+        if report.liczba_zdarzen_bez_hosta:
+            st.text(f"Zdarzenia bez hosta: {report.liczba_zdarzen_bez_hosta}")
         st.text(f"Utworzono raport: {format_time(report.created_at)}")
         st.text(f"Liczba zdarzeń: {report.liczba_zdarzen}")
         if report.prompt_version:
@@ -154,7 +161,10 @@ def render_report(report: RaportZdarzen) -> None:
             st.text(f"Model: {report.llm_model}")
         if report.analysis_id:
             st.text(f"Analiza źródłowa: {report.analysis_id}")
-            if report.group_id:
+            if report.group_ids:
+                with st.expander(f"Wybrane grupy ({len(report.group_ids)})"):
+                    st.text("\n".join(report.group_ids))
+            elif report.group_id:
                 st.text(f"Grupa: {report.group_id}")
             st.caption("Raport uruchomiono ręcznie. Samo wygenerowanie raportu nie potwierdza anomalii.")
         if report.finding:
@@ -255,7 +265,7 @@ def render_history() -> None:
             )
             rows = [{
                 "Utworzono (UTC)": format_time(item.created_at),
-                "Host": item.host or "Brak danych",
+                "Host": report_host(item),
                 "Zdarzenia": item.liczba_zdarzen,
                 "Podsumowanie": item.podsumowanie or "Brak podsumowania",
                 "ID": str(item.report_id)[:8],
@@ -312,6 +322,8 @@ def main() -> None:
         section[data-testid="stSidebar"],
         [data-testid="stSidebarCollapsedControl"],
         [data-testid="collapsedControl"] { display: none !important; }
+        [data-testid="stToolbar"], [data-testid="stMainMenu"],
+        [data-testid="stStatusWidget"], [data-testid="stAppDeployButton"] { display: none !important; }
         [data-testid="stText"] { line-height: 1.65; }
         </style>""", unsafe_allow_html=True,
     )
