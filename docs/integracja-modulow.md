@@ -21,7 +21,9 @@ Brak czasu lub hosta pozostaje brakiem danych. Obecne grupy SSH dotyczą jednego
 a parser HDFS nie wyznacza hosta. Generator nadal wymaga jednej wartości pola `host`
 w grupie (może to być `null`).
 
-Detekcja ML pozostaje `not_configured`. Reguły HDFS mają osobny `rules_status` i listę `findings`.
+Bez artefaktu `models/baseline.joblib` detekcja ML ma status `not_configured`.
+Po dodaniu zgodnego modelu API zapisuje wyniki ML obok reguł HDFS w `findings`.
+Reguły mają osobny `rules_status`.
 Utworzenie raportu nie oznacza wykrycia anomalii.
 `reporting_status: "not_run"` opisuje etap automatycznego pipeline'u analizy;
 raport jest obecnie uruchamiany osobnym żądaniem użytkownika.
@@ -72,13 +74,13 @@ Przy niejednoznaczności zmiany czasu UTC pozostaje puste z odpowiednią uwagą.
 Nowe analizy i wskazania są zapisywane w jednej transakcji w SQLite. Lista wykryć
 korzysta z filtrowania i stronicowania SQL. Brak tabeli wykryć w starszej bazie daje pustą listę.
 
-Odczyt dostarczonego `HDFS_2k.log` dał 2000 wpisów, 80 WARN, 2200 BlockID i 66 wskazań
+Odczyt dostarczonego `HDFS_2k.log` bez podłączonego artefaktu ML dał 2000 wpisów, 80 WARN, 2200 BlockID i 66 wskazań
 (64 połączone zbiory wyjątków oraz 2 żądania usunięcia po 100 bloków).
 To wynik działania reguł na próbce, a nie pomiar Precision/Recall ani liczba potwierdzonych anomalii.
 
 ## Kolejne kroki
 
-- Podłączenie modelu HD po udostępnieniu artefaktu i zgodnego przygotowania cech.
+- Sprawdzenie predykcji na docelowym artefakcie HD po osobnym przekazaniu `models/baseline.joblib`.
 - Stronicowanie zdarzeń po stronie API oraz zadania importu w tle, jeśli będą potrzebne.
   Obecnie odbiór pliku jest strumieniowy, ale analiza obejmuje ograniczoną paczkę do 10 000 wpisów.
 - Walidacja reguł, progów i jakości raportów na odpowiednich danych.
@@ -100,70 +102,73 @@ Lokalnie domyślny adres to `http://localhost:11434`; można go zmienić przez `
 
 ## Wyniki HD w dashboardzie
 
-`scripts/train.py` zapisuje wyniki do `runtime/evaluation/results.json`.
+Baseline HD `scripts/train.py` zapisuje wyniki do `reports/training_metrics_*.json`;
+API odczytuje najnowszy plik z tego katalogu albo wskazany `EVALUATION_RESULTS_PATH`.
 Macierz pomyłek ma kolejność klas `[0, 1]`: 0 — normalne, 1 — anomalie;
 wiersze oznaczają klasy rzeczywiste, kolumny przewidziane.
-Precision, Recall i F1 dotyczą klasy 1.
+Dashboard pokazuje Precision, Recall, F1, Accuracy, ROC AUC i AP, jeśli są
+dostępne, oraz metryki klas wyliczone z macierzy. Główny zestaw dotyczy klasy 1.
+Instrukcja uruchomienia baseline'u:
+[scripts/README.md](../scripts/README.md).
 
 Przed treningiem na przygotowanych danych syntetycznych HD ustawia:
 
 ```powershell
 $env:DATA_SOURCE = "synthetic"
 $env:DATASET_NAME = "synthetic-demo"
-python scripts/train.py
+python scripts/train.py --model-out artifacts/demo-baseline.joblib
 ```
 
 Na Ubuntu odpowiednikiem jest:
 
 ```bash
-DATA_SOURCE=synthetic DATASET_NAME=synthetic-demo python scripts/train.py
+DATA_SOURCE=synthetic DATASET_NAME=synthetic-demo python scripts/train.py --model-out artifacts/demo-baseline.joblib
 ```
 
 Dla rzeczywistego eksperymentu na Loghub ustaw `DATA_SOURCE=loghub` i dokładną nazwę
 zbioru w `DATASET_NAME`. Brak ustawienia daje `unknown`, widoczne jako ostrzeżenie.
 Sama etykieta źródła nie jest automatycznie weryfikowana — opisuje ją autor eksperymentu.
 
-Nie dodawaj `--test` podczas prac integracyjnych. Dashboard odczytuje zapisane wyniki,
-nie uruchamia oceny końcowej.
+Dashboard odczytuje zapisane wyniki, nie uruchamia treningu ani oceny.
+W Compose katalog `reports/` jest montowany do API. Można też wskazać konkretny
+plik przez `EVALUATION_RESULTS_PATH`.
 
-Jeśli trening odbywa się na serwerze, skopiuj gotowy plik wyników do
-`runtime/evaluation/results.json` na laptopie. Folder jest ignorowany przez Git
-i współdzielony z API w Compose. API można też skierować na inny plik przez
-`EVALUATION_RESULTS_PATH`.
+Obsługiwany jest płaski JSON eksportowany przez trening Colaba oraz format
+zbiorczy z polem `experiments`. W wynikach Colaba dashboard pokazuje wyłącznie
+metryki testowe dostępne w pliku. Porównuj modele oceniane na tym samym podziale.
 
-Obsługiwany jest format pojedynczego wyniku z `scripts/train.py` albo zbiorczy:
-obiekt z polem `experiments`, zawierającym tablicę pełnych obiektów wyników.
-Porównuj modele trenowane i oceniane na tym samym podziale danych. Obecny plik
-opisuje metryki zbiorcze; szczegółowa analiza błędnych predykcji pozostaje zadaniem HD.
+## Artefakt i wejście detektora ML
 
-## Co jest jeszcze potrzebne do podłączenia detektora
+`scripts/prepare_hdfs_features.py` tworzy treningowe cechy z surowego HDFS.log i
+etykiet BlockID, a API liczy te same cechy z grupy zdarzeń. Model musi być
+wytrenowany na tej reprezentacji; identyfikatory Drain3 nie są używane jako
+cechy.
 
-Dodano brakujący `scripts/predict.py`, używany przez `scripts/check.py`.
-Wczytuje parę `(vectorizer, classifier)` zapisywaną przez obecny `scripts/train.py`
-i wykonuje predykcję dla gotowego tekstu `Features`. Wynik zawiera `is_anomaly`,
-`score`, `score_type: "anomaly_probability"` i `model_version`.
-Score jest wynikiem `predict_proba` klasy 1, a nie zweryfikowaną pewnością diagnozy.
-Grupa bez żadnej znanej cechy jest odrzucana. Nie używaj tego wejścia do surowych logów.
-`scripts/check.py` sprawdza obecnie część walidacyjną, pozostawiając testową do oceny końcowej.
-Wymagane biblioteki: `python -m pip install -r scripts/requirements.txt`.
+Wymagany artefakt to `models/baseline.joblib`, pipeline TF-IDF + LogisticRegression
+z klasami `[0, 1]`. Skopiowanie go do
+repozytorium aktywuje ocenę grup HDFS w API i dashboardzie. Wyniki są osobnymi
+wskazaniami `source=ml`; grupa bez znanych cech jest pomijana i oznaczana jako
+częściowo oceniona. Score `predict_proba` to wynik klasyfikatora, a nie
+zweryfikowana pewność diagnozy. Opis nazw plików i kontraktu jest w
+[models/README.md](../models/README.md).
 
-Z samego `models/baseline.joblib` nie da się odtworzyć poprawnego przetwarzania
-surowych logów. Obecny skrypt HD uczy model na kolumnie `Features` z
-`data/preprocessed/Event_traces.csv`, używając identyfikatorów zdarzeń.
-
-HD powinien udostępnić:
-
-- aktualną funkcję predykcji i wersję wytrenowanego modelu;
-- kod przygotowujący `Features` z nowych logów, wraz z mapowaniem szablonów na
-  identyfikatory zdarzeń i sposobem obsługi nieznanych szablonów;
-- przykładową grupę HDFS z oczekiwanym wejściem i wynikiem predykcji;
-- opis źródła danych treningowych i wersje bibliotek potrzebne do wczytania modelu.
-
-Wtedy JB podłącza ten kod w `pipeline.py`, a JF prezentuje wynik grupy i umożliwia
-raportowanie wykrytych anomalii. Nie wolno zastępować identyfikatorów cech modelu
-numerami klastrów Drain3 tworzonymi od nowa dla każdej paczki API.
+Model należy trenować na etykietowanym HDFS_v1. Nie używaj wyniku reguł HDFS
+jako etykiet. Predykcje ML pozostają niedostępne, jeśli zgodny artefakt nie
+znajduje się pod skonfigurowaną ścieżką.
 
 ## Weryfikacja
+
+Po scaleniu wersji HD i JF testy integracyjne sprawdzają również: wczytanie
+testowego pipeline'u TF-IDF, predykcję grup HDFS, zapis wskazania `source=ml`,
+generowanie raportu w schemacie 2 i odczyt z historii. Odpowiedź Ollamy jest
+kontrolowana, model jest małym artefaktem utworzonym w katalogu testowym.
+Osobny test odczytuje dostarczony plik metryk HD i sprawdza widok testowego F1
+oraz macierz pomyłek. Testy nie odtwarzają treningu HD ani nie potwierdzają
+zgodności jego docelowego artefaktu, którego nie ma w repozytorium.
+
+Wskazanie ML zapisuje `details.group_id` i identyfikatory wpisów rzeczywiście
+użytych do predykcji. Wpis wymieniający kilka bloków pozostaje widoczny
+w ich grupach, ale jego cechy są używane tylko dla pierwszego BlockID.
 
 Testy obejmują parsowanie, zapis analizy, wybór grupy, wygenerowanie raportu,
 zapis i odczyt z historii oraz przejście w dashboardzie. W testach odpowiedź Ollamy

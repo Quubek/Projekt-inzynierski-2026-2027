@@ -30,8 +30,13 @@ def render_evaluation() -> None:
         ),
     )
     result = results.experiments[selected]
+    split_summary = [f"Trening: {result.split.train}"]
+    if result.split.val:
+        split_summary.append(f"Walidacja: {result.split.val}")
+    if result.split.test:
+        split_summary.append(f"Test: {result.split.test}")
     st.caption(
-        f"Trening: {result.split.train} · Walidacja: {result.split.val} · Test: {result.split.test}"
+        " · ".join(split_summary)
     )
     if result.data_source == "synthetic":
         st.warning(
@@ -42,15 +47,26 @@ def render_evaluation() -> None:
         st.warning("Nie określono pochodzenia danych w pliku wyników.")
     else:
         st.caption(f"Źródło danych: Loghub · Zbiór: {result.dataset}")
+    available_parts = [
+        value for value, metrics in (("validation", result.validation), ("test", result.test))
+        if metrics is not None
+    ]
     part = st.selectbox(
-        "Oceniana część danych", ["validation", "test"] if result.test else ["validation"],
-        format_func=lambda value: "Walidacja" if value == "validation" else "Test końcowy",
+        "Oceniana część danych", available_parts,
+        format_func=lambda value: "Walidacja" if value == "validation" else "Test",
     )
     metrics = result.validation if part == "validation" else result.test
-    for column, label, value in zip(
-        st.columns(3), ["Precision", "Recall", "F1"],
-        [metrics.precision, metrics.recall, metrics.f1],
+    labels = ["Precision", "Recall", "F1"]
+    values = [metrics.precision, metrics.recall, metrics.f1]
+    for label, value in (
+        ("Accuracy", metrics.accuracy),
+        ("ROC AUC", metrics.roc_auc),
+        ("AP", metrics.average_precision),
     ):
+        if value is not None:
+            labels.append(label)
+            values.append(value)
+    for column, label, value in zip(st.columns(len(labels)), labels, values):
         column.metric(label, f"{value:.4f}")
     st.caption(f"Metryki dotyczą klasy anomalii (1). Liczba ocenionych przykładów: {metrics.n}.")
     st.subheader("Macierz pomyłek")
@@ -60,4 +76,10 @@ def render_evaluation() -> None:
          "Przewidziane: anomalia (1)": row[1]}
         for label, row in zip(["Normalne (0)", "Anomalia (1)"], matrix)
     ], hide_index=True, width="stretch")
+    if metrics.per_class:
+        st.subheader("Metryki według klasy")
+        st.dataframe([
+            {"Klasa": label, **values}
+            for label, values in metrics.per_class.items()
+        ], hide_index=True, width="stretch")
     st.caption("Widok odczytuje zapisane wyniki. Nie uruchamia treningu ani oceny zbioru testowego.")

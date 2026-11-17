@@ -69,6 +69,9 @@ class NormalizedEvent(BaseModel):
 class EventGroup(BaseModel):
     group_id: str
     event_ids: list[str]
+    ml_prediction: Literal["normal", "anomaly"] | None = None
+    ml_score: float | None = Field(default=None, ge=0, le=1)
+    model_version: str | None = None
 
 
 class RuleDefinition(BaseModel):
@@ -111,7 +114,7 @@ class AnalysisResponse(BaseModel):
     log_format: Literal["hdfs", "ssh"] = "hdfs"
     events: list[NormalizedEvent]
     groups: list[EventGroup]
-    detection_status: Literal["not_configured"] = "not_configured"
+    detection_status: Literal["not_configured", "completed", "partial"] = "not_configured"
     reporting_status: Literal["not_run"] = "not_run"
     warnings: list[str]
     diagnostics: list[str] = Field(default_factory=list)
@@ -213,6 +216,10 @@ class DetectionMetrics(BaseModel):
     precision: float = Field(ge=0, le=1)
     recall: float = Field(ge=0, le=1)
     f1: float = Field(ge=0, le=1)
+    accuracy: float | None = Field(default=None, ge=0, le=1)
+    roc_auc: float | None = Field(default=None, ge=0, le=1)
+    average_precision: float | None = Field(default=None, ge=0, le=1)
+    per_class: dict[str, dict[str, float]] = Field(default_factory=dict)
     confusion_matrix: list[list[int]]
     n: int = Field(ge=1)
 
@@ -230,8 +237,8 @@ class DetectionMetrics(BaseModel):
 
 class ExperimentSplit(BaseModel):
     train: int = Field(ge=1)
-    val: int = Field(ge=1)
-    test: int = Field(ge=1)
+    val: int = Field(default=0, ge=0)
+    test: int = Field(default=0, ge=0)
 
 
 class ExperimentResult(BaseModel):
@@ -241,14 +248,18 @@ class ExperimentResult(BaseModel):
     data_source: Literal["synthetic", "loghub", "unknown"] = "unknown"
     class_labels: list[int] = Field(default_factory=lambda: [0, 1])
     split: ExperimentSplit
-    validation: DetectionMetrics
+    validation: DetectionMetrics | None = None
     test: DetectionMetrics | None = None
 
     @model_validator(mode="after")
     def validate_experiment(self):
         if self.class_labels != [0, 1]:
             raise ValueError("Oczekiwana kolejność klas: 0 — normalne, 1 — anomalie.")
-        if self.validation.n != self.split.val or (self.test and self.test.n != self.split.test):
+        if self.validation is None and self.test is None:
+            raise ValueError("Eksperyment musi zawierać metryki walidacyjne albo testowe.")
+        if self.validation and self.validation.n != self.split.val:
+            raise ValueError("Rozmiar walidacji nie zgadza się z podziałem danych.")
+        if self.test and self.test.n != self.split.test:
             raise ValueError("Rozmiar ocenianej części nie zgadza się z podziałem danych.")
         return self
 

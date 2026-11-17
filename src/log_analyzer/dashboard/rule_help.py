@@ -14,8 +14,11 @@ def render_rule(rule: RuleDefinition) -> None:
 
 
 def render_finding_rules(finding: Finding) -> None:
+    rules = finding_rules(finding)
+    if not rules:
+        return
     st.caption("Dopasowane reguły — najedź na nazwę lub kliknij, aby przeczytać opis.")
-    for rule in finding_rules(finding):
+    for rule in rules:
         render_rule(rule)
 
 

@@ -1,4 +1,8 @@
-import random, pandas as pd
+import random
+from pathlib import Path
+
+import pandas as pd
+
 random.seed(42)
 N_NORMAL, N_ANOM = 6000, 200
 NORMAL = ["E5","E22","E11","E9","E26","E3","E18","E25","E6","E16"]
@@ -13,6 +17,8 @@ for i in range(N_NORMAL + N_ANOM):
     bid = f"blk_{i}"
     rows.append({"BlockId": bid, "Label": "Success", "Type": 1, "Features": "[" + ",".join(seq) + "]"})
     labels.append({"BlockId": bid, "Label": "Anomaly" if anom else "Normal"})
-pd.DataFrame(rows).to_csv("data/preprocessed/Event_traces.csv", index=False)
-pd.DataFrame(labels).to_csv("data/preprocessed/anomaly_label.csv", index=False)
+output_dir = Path("data/preprocessed")
+output_dir.mkdir(parents=True, exist_ok=True)
+pd.DataFrame(rows).to_csv(output_dir / "Event_traces.csv", index=False)
+pd.DataFrame(labels).to_csv(output_dir / "anomaly_label.csv", index=False)
 print("OK: wygenerowano dane syntetyczne")

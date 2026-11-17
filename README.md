@@ -4,7 +4,8 @@
 
 Przyjmowanie i walidacja logów, normalizacja HDFS/SSH, szablony Drain3 oraz
 grupowanie HDFS po BlockID są dostępne w pierwszej wersji API.
-Integracja modelu detekcji i automatyczne generowanie raportów pozostają do wykonania.
+Adapter modelu detekcji działa po dodaniu wytrenowanego artefaktu HDFS_v1;
+automatyczne generowanie raportów pozostaje do wykonania.
 [Uruchomienie API i dashboardu](docs/uruchomienie-dashboardu.md).
 
 ## Historia raportów — dashboard JF
@@ -25,6 +26,8 @@ nowych raportów; przeglądanie zapisanych raportów działa niezależnie.
 
 [Instrukcja dashboardu](docs/uruchomienie-dashboardu.md) ·
 [Integracja modułów i wyniki HD](docs/integracja-modulow.md) ·
+[Baseline detekcji HD](scripts/README.md) ·
+[Artefakt modelu ML](models/README.md) ·
 [Generowanie i odczyt raportów](docs/uruchomienie-raportowania.md)
 
 Projekt inżynierski: Zastosowanie modelu przetwarzania języka naturalnego (NLP) do
