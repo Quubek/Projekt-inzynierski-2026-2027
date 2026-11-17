@@ -84,3 +84,8 @@ Model przyjmuje sklejony tekst surowych linii sesji BlockID. Skrypt przygotowani
 danych i API odtwarzają ten sam format; identyfikatory Drain3 nie są cechami
 modelu. Wyniki syntetyczne służą wyłącznie do sprawdzenia przepływu. Model do
 analizy logów należy trenować na etykietowanym HDFS_v1.
+
+`scripts/check.py` dotyczy wcześniejszego wariantu train/val/test i wymaga
+`models/split_val.csv`. Obecny trening tworzy train/test, więc do pojedynczego
+sprawdzenia predykcji użyj `scripts/predict.py` zgodnie z instrukcją powyżej.
+Nie zastępuj brakującego podziału walidacyjnego zbiorem testowym.

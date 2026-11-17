@@ -9,5 +9,5 @@ font = "sans serif"
 [browser]
 gatherUsageStats = false
 
-[server]
-maxUploadSize = 2
+# Import plików do 2 GiB obsługuje strumieniowy endpoint API.
+# Nie korzysta z buforującego pliki w RAM st.file_uploader.

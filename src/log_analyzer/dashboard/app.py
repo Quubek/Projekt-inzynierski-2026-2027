@@ -9,12 +9,13 @@ from uuid import UUID
 
 import streamlit as st
 
-from log_analyzer.contracts import RaportZdarzen
+from log_analyzer.contracts import RaportZdarzen, UstrukturyzowanaTrescRaportu
 from log_analyzer.dashboard.api_client import ReportsApi, ReportsApiError
 from log_analyzer.dashboard.analysis import render_analysis
 from log_analyzer.dashboard.evaluation import render_evaluation
 from log_analyzer.dashboard.findings import render_finding_page, render_findings
 from log_analyzer.dashboard.rule_help import render_finding_rules, render_rule_legend
+from log_analyzer.dashboard.rule_catalog import render_rule_catalog
 from log_analyzer.detection.catalog import finding_title
 from log_analyzer.dashboard.navigation import VIEWS, navigate, render_navigation
 
@@ -111,13 +112,32 @@ def render_report(report: RaportZdarzen) -> None:
                 f"Pozostałych {report.llm_omitted_events} wpisów nie przekazano w oryginalnej postaci. Pełne logi zachowano w źródłach raportu.")
     summary, sources, metadata = st.tabs(["Podsumowanie", "Zdarzenia źródłowe", "Dane raportu"])
     with summary:
-        with st.container(border=True):
-            st.subheader("Co się wydarzyło")
-            st.text(report.tresc.podsumowanie)
-        with st.container(border=True):
-            st.subheader("Rekomendacja modelu")
-            st.text(report.tresc.rekomendacja)
-            st.caption("Treść wygenerowana przez LLM wymaga oceny analityka.")
+        if isinstance(report.tresc, UstrukturyzowanaTrescRaportu):
+            with st.container(border=True):
+                st.subheader("Obserwacja")
+                st.text(report.tresc.obserwacja)
+            with st.container(border=True):
+                st.subheader("Powód wskazania")
+                st.text(report.tresc.powod_wskazania)
+            with st.container(border=True):
+                st.subheader("Ograniczenia oceny")
+                for limitation in report.tresc.ograniczenia_oceny:
+                    st.text(f"• {limitation}")
+                if not report.tresc.ograniczenia_oceny:
+                    st.caption("Model nie wskazał dodatkowych ograniczeń.")
+            with st.container(border=True):
+                st.subheader("Zalecane sprawdzenia")
+                for number, action in enumerate(report.tresc.zalecenia, start=1):
+                    st.text(f"{number}. {action}")
+        else:
+            st.caption("Raport zapisano we wcześniejszym formacie. Wyświetlamy oryginalną treść.")
+            with st.container(border=True):
+                st.subheader("Co się wydarzyło")
+                st.text(report.tresc.podsumowanie)
+            with st.container(border=True):
+                st.subheader("Rekomendacja modelu")
+                st.text(report.tresc.rekomendacja)
+        st.caption("Treść wygenerowana przez LLM wymaga oceny analityka.")
     with sources:
         st.subheader("Oryginalne logi")
         st.caption("Identyfikatory i treść zdarzeń wykorzystanych w raporcie.")
@@ -128,6 +148,10 @@ def render_report(report: RaportZdarzen) -> None:
         st.text(f"Host: {report.host or 'Brak danych'}")
         st.text(f"Utworzono raport: {format_time(report.created_at)}")
         st.text(f"Liczba zdarzeń: {report.liczba_zdarzen}")
+        if report.prompt_version:
+            st.text(f"Wersja prompta: {report.prompt_version}")
+        if report.llm_model:
+            st.text(f"Model: {report.llm_model}")
         if report.analysis_id:
             st.text(f"Analiza źródłowa: {report.analysis_id}")
             if report.group_id:
@@ -153,26 +177,24 @@ def render_report(report: RaportZdarzen) -> None:
 
 
 def render_home() -> None:
-    st.caption("ANALIZATOR LOGÓW / START")
-    st.title("Co chcesz zrobić?")
+    st.title("Analizator logów")
     st.write("Wybierz obszar pracy. Każda część ma swój osobny widok.")
     st.write("")
     cards = [
-        ("analysis", "01", "Analiza logów",
-         "Przesyłanie logów, filtry zdarzeń, grupy i reguły HDFS.", "Dostępne"),
-        ("findings", "02", "Wykrycia i anomalie",
-         "Sygnały do sprawdzenia, uzasadnienia reguł i zdarzenia źródłowe.", "Reguły HDFS"),
-        ("history", "03", "Historia raportów",
-         "Wyszukiwanie zapisanych raportów, szczegóły i pobieranie JSON.", "Dostępne"),
-        ("evaluation", "04", "Ocena modeli",
-         "Metryki eksperymentów i porównanie metod wykrywania anomalii.", "Odczyt wyników"),
+        ("analysis", "Analiza logów",
+         "Przesyłanie logów, filtry zdarzeń, grupy i reguły HDFS."),
+        ("findings", "Wykrycia i anomalie",
+         "Sygnały do sprawdzenia, uzasadnienia reguł i zdarzenia źródłowe."),
+        ("history", "Historia raportów",
+         "Wyszukiwanie zapisanych raportów, szczegóły i pobieranie JSON."),
+        ("evaluation", "Ocena modeli",
+         "Metryki eksperymentów i porównanie metod wykrywania anomalii."),
     ]
     tiles, legend = st.columns([2, 1], gap="large")
     with tiles:
         for start in range(0, len(cards), 2):
-            for column, (view, number, title, description, status) in zip(st.columns(2), cards[start:start + 2]):
+            for column, (view, title, description) in zip(st.columns(2), cards[start:start + 2]):
                 with column, st.container(border=True):
-                    st.caption(f"{number} / {status}")
                     st.subheader(title)
                     st.write(description)
                     st.button("Otwórz", key=f"tile_{view}", width="stretch",
@@ -309,6 +331,8 @@ def main() -> None:
         render_findings()
     elif view == "finding":
         render_finding_page()
+    elif view == "rules":
+        render_rule_catalog()
     else:
         render_evaluation()
 

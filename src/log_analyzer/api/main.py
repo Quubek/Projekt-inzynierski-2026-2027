@@ -22,6 +22,7 @@ from log_analyzer.pipeline import analyze
 from log_analyzer.reporting import service as reporting_service
 from log_analyzer.reporting.ollama_klient import EmptyModelOutputError
 from log_analyzer.storage import sqlite_repo
+from log_analyzer.api.file_import import build_file_import_router
 
 app = FastAPI(title="Analiza logow - API JB", version="0.1.0")
 
@@ -54,6 +55,9 @@ def analyze_logs(request: AnalyzeRequest):
     except sqlite3.Error as error:
         raise HTTPException(status_code=503, detail="Nie można zapisać analizy.") from error
     return result
+
+
+app.include_router(build_file_import_router(analyze_logs))
 
 
 @app.get("/api/v1/analyses/{analysis_id}", response_model=AnalysisResponse)

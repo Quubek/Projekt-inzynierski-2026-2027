@@ -4,8 +4,10 @@ import os
 import hashlib
 from collections import Counter
 from datetime import datetime
+from uuid import UUID
 
 import streamlit as st
+import streamlit.components.v1 as components
 from pydantic import ValidationError
 
 from log_analyzer.contracts import MAX_LOG_LINES, AnalysisResponse, AnalyzeRequest
@@ -13,23 +15,15 @@ from log_analyzer.dashboard import api_client
 from log_analyzer.dashboard.api_client import ReportsApiError
 from log_analyzer.dashboard.navigation import navigate
 from log_analyzer.dashboard.presentation import EVENT_TYPES, event_time
+from log_analyzer.parsing.addresses import addresses_for_event, all_addresses
 
 
 MAX_INPUT_BYTES = 2 * 1024 * 1024
 
 
-def decode_log_file(content: bytes) -> str:
-    if len(content) > MAX_INPUT_BYTES:
-        raise ValueError("Plik może mieć maksymalnie 2 MB.")
-    try:
-        return content.decode("utf-8-sig")
-    except UnicodeDecodeError as error:
-        raise ValueError("Nie można odczytać pliku. Zapisz go w kodowaniu UTF-8.") from error
-
-
 def prepare_request(text: str, log_format: str, **options) -> AnalyzeRequest:
     if len(text.encode("utf-8")) > MAX_INPUT_BYTES:
-        raise ValueError("Przekazany tekst może mieć maksymalnie 2 MB.")
+        raise ValueError("Wklejony tekst może mieć maksymalnie 2 MB. Większe dane prześlij jako plik (do 2 GB).")
     lines = [line for line in text.lstrip("\ufeff").splitlines() if line.strip()]
     if not lines:
         raise ValueError("Wklej logi lub wybierz plik zawierający zdarzenia.")
@@ -54,7 +48,7 @@ def render_analysis_result(result: AnalysisResponse) -> None:
     detection_text = {
         "not_configured": "Model ML: niepodłączony.",
         "completed": "Model ML ocenił grupy HDFS.",
-        "partial": "Model ML ocenił tylko część grup; niektóre cechy były nieznane.",
+        "partial": "Nie oceniono wszystkich grup modelem ML. Szczegóły znajdują się w uwagach do wyniku.",
     }[result.detection_status]
     st.info(
         "Przetwarzanie zakończono. " + detection_text + " "
@@ -74,7 +68,7 @@ def render_analysis_result(result: AnalysisResponse) -> None:
             "Czas": event_time(event), "Poziom logu": event.log_level or "Nie podano",
             "Komponent": event.component,
             "Operacja": EVENT_TYPES.get(event.event_type, event.event_type),
-            "Komunikat": event.message,
+            **event_address_columns(event),
         } for event in filtered], hide_index=True, width="stretch", on_select="rerun", selection_mode="single-row",
             key=f"analysis_events_{result.analysis_id}_{hashlib.sha256('|'.join(e.event_id for e in filtered).encode()).hexdigest()[:12]}")
         if table.selection.rows and table.selection.rows[0] < len(filtered):
@@ -111,11 +105,17 @@ def render_analysis_result(result: AnalysisResponse) -> None:
 
 def filter_events(result):
     prefix = result.analysis_id
+    addresses = {event.event_id: addresses_for_event(event) for event in result.events}
     with st.expander("Filtry zdarzeń"):
         level_col, component_col, search_col = st.columns([1, 2, 2])
         level = level_col.selectbox("Poziom logu", ["Wszystkie", *sorted({e.log_level for e in result.events if e.log_level})], key=f"level_{prefix}")
         component = component_col.selectbox("Komponent", ["Wszystkie", *sorted({e.component for e in result.events})], key=f"component_{prefix}")
         query = search_col.text_input("IP, BlockID lub fragment komunikatu", key=f"search_{prefix}").strip().casefold()
+        source_col, destination_col, any_col = st.columns(3)
+        source = address_filter(source_col, "IP źródłowe", addresses, "source_ip", f"source_ip_{prefix}")
+        destination = address_filter(destination_col, "IP docelowe", addresses, "destination_ip", f"destination_ip_{prefix}")
+        any_ip = address_filter(any_col, "IP w dowolnej roli", addresses, None, f"any_ip_{prefix}")
+        st.caption("Źródło i cel dotyczą opisanej transmisji. Adresat polecenia i węzeł są osobnymi rolami. Filtry łączą się ze sobą.")
         start_col, end_col = st.columns(2)
         start = start_col.date_input("Data źródłowa od", value=None, key=f"event_from_{prefix}")
         end = end_col.date_input("Data źródłowa do", value=None, key=f"event_to_{prefix}")
@@ -125,6 +125,11 @@ def filter_events(result):
         return []
     filtered = []
     for event in result.events:
+        ips = addresses[event.event_id]
+        if not address_matches(ips, source, "source_ip") or not address_matches(ips, destination, "destination_ip"):
+            continue
+        if not address_matches(ips, any_ip):
+            continue
         if level != "Wszystkie" and event.log_level != level:
             continue
         if component != "Wszystkie" and event.component != component:
@@ -138,6 +143,34 @@ def filter_events(result):
             continue
         filtered.append(event)
     return filtered
+
+
+def address_filter(column, label, addresses, role, key):
+    values = sorted({ip for item in addresses.values() for ip in address_values(item, role)})
+    choices = ["all", "unknown", *values]
+    return column.selectbox(label, choices, key=key, format_func=lambda value:
+                            "Wszystkie" if value == "all" else
+                            ("Nie ustalono" if role else "Brak adresów IP") if value == "unknown" else value)
+
+
+def address_matches(addresses, selected, role=None):
+    values = address_values(addresses, role)
+    return selected == "all" or (not values if selected == "unknown" else selected in values)
+
+
+def address_values(addresses, role=None):
+    if role:
+        return [addresses[role]] if addresses[role] else []
+    return all_addresses(addresses)
+
+
+def event_address_columns(event):
+    addresses = addresses_for_event(event)
+    endpoints = {addresses["source_ip"], addresses["destination_ip"]}
+    remaining = [ip for ip in all_addresses(addresses) if ip not in endpoints]
+    return {"IP źródłowe": addresses["source_ip"] or "Nie ustalono",
+            "IP docelowe": addresses["destination_ip"] or "Nie ustalono",
+            "Pozostałe IP": ", ".join(remaining) or "Nie ustalono"}
 
 
 def group_time_bounds(events):
@@ -154,6 +187,11 @@ def render_event_details(event):
     st.subheader(f"Szczegóły wpisu {event.source_line or event.event_id}")
     st.code(event.raw, language="text", wrap_lines=True)
     st.text(f"Host źródłowy: {event.host or 'Nie ustalono'}")
+    addresses = addresses_for_event(event)
+    for role, label in (("source_ip", "IP źródłowe"), ("destination_ip", "IP docelowe"),
+                        ("node_ip", "IP węzła"), ("target_ip", "Adresat polecenia")):
+        st.text(f"{label}: {addresses[role] or 'Nie ustalono'}")
+    st.text("Pozostałe adresy o nieustalonej roli: " + (", ".join(addresses["other_ips"]) or "Nie ustalono"))
     st.text("Pochodzenie strefy: " + {"log": "z logu", "configuration": "z ustawień źródła", "unknown": "nie ustalono"}[event.timezone_source])
     st.json(event.parameters)
     if event.block_ids:
@@ -193,15 +231,41 @@ def render_group_reporting(result: AnalysisResponse) -> None:
             )
 
 
+def load_imported_analysis() -> None:
+    analysis_id = st.query_params.get("analysis_id")
+    if not analysis_id or st.session_state.get("loaded_import_id") == analysis_id:
+        return
+    st.session_state.pop("analysis_result", None)
+    try:
+        canonical_id = str(UUID(analysis_id))
+    except ValueError:
+        st.error("Niepoprawny identyfikator zaimportowanej analizy.")
+        return
+    try:
+        with api_client.ReportsApi(os.getenv("API_URL", "http://127.0.0.1:8000")) as api:
+            result = api.analysis(canonical_id)
+        st.session_state["analysis_result"] = result.model_dump(mode="json")
+        st.session_state["loaded_import_id"] = analysis_id
+    except ReportsApiError as error:
+        st.error(str(error))
+
+
 def render_analysis() -> None:
     st.caption("ANALIZATOR LOGÓW / ANALIZA")
     st.title("Analiza logów")
     st.write("Prześlij logi i sprawdź ich podział na zdarzenia oraz grupy.")
     st.caption("Obecnie dostępne: przyjmowanie i parsowanie logów SSH oraz HDFS.")
+    load_imported_analysis()
     mode = st.radio(
         "Źródło logów", ["Wklej tekst", "Prześlij plik"],
         horizontal=True, key="analysis_input_mode",
     )
+    if mode == "Prześlij plik":
+        upload_url = os.getenv("API_PUBLIC_URL", "http://localhost:8000").rstrip("/") + "/import"
+        st.caption("Import do 2 GB i 10 000 niepustych wpisów. Po zakończeniu otwórz zapisany wynik analizy.")
+        components.iframe(upload_url, height=720, scrolling=True)
+        st.link_button("Otwórz import w osobnej karcie", upload_url)
+        return
     for key, default in (("analysis_text", ""), ("analysis_format", "ssh")):
         if key not in st.session_state:
             st.session_state[key] = st.session_state.get("saved_" + key, default)
@@ -216,33 +280,23 @@ def render_analysis() -> None:
             scope = st.selectbox("Kompletność danych", ["unknown", "sample", "complete"],
                                  format_func=lambda value: {"unknown": "Nie ustalono", "sample": "Próbka danych", "complete": "Deklaruję pełny zapis"}[value], key="source_scope")
             st.caption("Nie wpisuj strefy laptopa, jeśli nie znasz strefy zapisanej w źródle. Strefa jawna w logu ma pierwszeństwo.")
-        text = ""
-        upload = None
-        if mode == "Wklej tekst":
-            text = st.text_area(
-                "Logi — jeden wpis w wierszu", height=220, key="analysis_text",
-                max_chars=MAX_INPUT_BYTES,
-                placeholder="Nov 4 10:14:03 server01 sshd[1234]: Failed password for admin from 192.0.2.10 port 51234 ssh2",
-            )
-        else:
-            upload = st.file_uploader(
-                "Wybierz plik .log lub .txt", type=["log", "txt"], key="analysis_file",
-                help=f"Kodowanie UTF-8, maksymalnie 2 MB i {MAX_LOG_LINES} niepustych wpisów.",
-            )
+        text = st.text_area(
+            "Logi — jeden wpis w wierszu", height=220, key="analysis_text",
+            max_chars=MAX_INPUT_BYTES,
+            placeholder="Nov 4 10:14:03 server01 sshd[1234]: Failed password for admin from 192.0.2.10 port 51234 ssh2",
+        )
+        st.caption("Wklejanie: do 2 MB tekstu. Większe dane prześlij jako plik (do 2 GB).")
         st.caption(f"Puste wiersze są pomijane. Maksymalnie {MAX_LOG_LINES} wpisów w jednej paczce.")
         submitted = st.form_submit_button("Sprawdź logi", key="submit_analysis", type="primary")
 
     st.session_state["saved_analysis_format"] = log_format
-    if mode == "Wklej tekst":
-        st.session_state["saved_analysis_text"] = text
+    st.session_state["saved_analysis_text"] = text
     if submitted:
         # Błąd nowej próby nie może pozostawić na ekranie wyniku wcześniejszej paczki.
         st.session_state.pop("analysis_result", None)
+        st.session_state.pop("loaded_import_id", None)
+        st.query_params.pop("analysis_id", None)
         try:
-            if mode == "Prześlij plik":
-                if upload is None:
-                    raise ValueError("Wybierz plik z logami.")
-                text = decode_log_file(upload.getvalue())
             if year_text and not year_text.isdecimal():
                 raise ValueError("Rok źródła musi być liczbą, np. 2026.")
             request = prepare_request(text, log_format, source_timezone=zone or None,

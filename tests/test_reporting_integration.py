@@ -23,8 +23,10 @@ ROOT = Path(__file__).resolve().parents[1]
 def ollama_client(monkeypatch):
     client = MagicMock()
     client.chat.return_value = SimpleNamespace(message=SimpleNamespace(content=json.dumps({
-        "podsumowanie": "Opis przekazanych zdarzeń.",
-        "rekomendacja": "Zweryfikować kontekst zdarzeń.",
+        "obserwacja": "Opis przekazanych zdarzeń.",
+        "powod_wskazania": "Ręczny opis zdarzeń bez przekazanego wyniku detekcji.",
+        "ograniczenia_oceny": ["Nie ustalono pełnego czasu ze strefą."],
+        "zalecenia": ["Zweryfikować kontekst zdarzeń.", "Sprawdzić powiązane wpisy źródłowe."],
     })))
     monkeypatch.setattr(ollama_klient, "Client", lambda **kwargs: client)
     return client
@@ -52,6 +54,12 @@ def test_analysis_report_history_roundtrip(ollama_client, log_format):
     assert report["analysis_id"] == analysis["analysis_id"]
     assert report["group_id"] == group["group_id"]
     assert report["generation_mode"] == "manual"
+    assert report["tresc"]["schema_version"] == 2
+    assert len(report["tresc"]["zalecenia"]) == 2
+    assert report["prompt_version"] == "log-report-v2"
+    messages = ollama_client.chat.call_args.kwargs["messages"]
+    assert [message["role"] for message in messages] == ["system", "user"]
+    assert json.loads(messages[1]["content"])["total_events"] == len(group["event_ids"])
     source = {event["event_id"]: event["raw"] for event in analysis["events"]}
     assert report["tresc"]["kluczowe_zdarzenia"] == [f"{eid}: {source[eid]}" for eid in group["event_ids"]]
     assert backend.get(f"/api/v1/reports/{report['report_id']}").json() == report
@@ -114,7 +122,9 @@ def test_large_group_uses_explicit_aggregation_and_preserves_all_sources(ollama_
     assert len(report["tresc"]["kluczowe_zdarzenia"]) == 21
     assert len(report["llm_event_ids"]) + report["llm_omitted_events"] == 21
     ollama_client.chat.assert_called_once()
-    assert set(ollama_client.chat.call_args.kwargs["format"]["properties"]) == {"podsumowanie", "rekomendacja"}
+    assert set(ollama_client.chat.call_args.kwargs["format"]["properties"]) == {
+        "obserwacja", "powod_wskazania", "ograniczenia_oceny", "zalecenia",
+    }
 
 
 def test_missing_analysis_read_does_not_create_database():

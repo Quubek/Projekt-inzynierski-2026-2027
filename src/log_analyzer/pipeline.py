@@ -25,6 +25,7 @@ def _evaluate_model(events, groups, analysis_id: str):
     skipped = 0
     for group in groups:
         members = [events_by_id[event_id] for event_id in group.event_ids]
+        model_members = [event for event in members if event.block_ids and event.block_ids[0] == group.group_id]
         features = features_from_block(group.group_id, members)
         try:
             prediction = predict_features(features, model_path)
@@ -51,14 +52,16 @@ def _evaluate_model(events, groups, analysis_id: str):
                     "To wynik klasyfikatora, który wymaga weryfikacji na logach źródłowych."
                 ),
                 source="ml",
-                event_ids=group.event_ids,
+                event_ids=[event.event_id for event in model_members],
                 score=prediction["score"],
                 model_version=prediction["model_version"],
+                details={"group_id": group.group_id},
             ))
 
     if skipped:
         return scored_groups, findings, "partial", (
-            f"Model pominął {skipped} grup bez cech rozpoznawanych przez jego słownik."
+            f"Model nie ocenił {skipped} grup. Sprawdź dostępność i zgodność artefaktu "
+            "oraz obecność cech rozpoznawanych przez jego słownik."
         )
     return scored_groups, findings, "completed", None
 

@@ -8,3 +8,4 @@ from log_analyzer.storage import sqlite_repo
 @pytest.fixture(autouse=True)
 def isolated_database(tmp_path, monkeypatch):
     monkeypatch.setattr(sqlite_repo, "SCIEZKA_BAZY", tmp_path / "test.sqlite3")
+    monkeypatch.delenv("DETECTION_MODEL_PATH", raising=False)

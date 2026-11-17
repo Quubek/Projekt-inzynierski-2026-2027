@@ -9,6 +9,7 @@ from drain3.masking import MaskingInstruction
 from drain3.template_miner_config import TemplateMinerConfig
 
 from log_analyzer.contracts import EventGroup, NormalizedEvent
+from log_analyzer.parsing.addresses import ROLES, extract_addresses
 
 HDFS = re.compile(
     r"^(?P<date>\d{6}) (?P<time>\d{6})(?P<offset>Z|[+-]\d{2}:?\d{2})? (?P<pid>\d+) "
@@ -126,10 +127,14 @@ def parse_logs(
         parameters = {key: fields[key] for key in ("pid", "level") if key in fields}
         category, extracted = event_details(message, log_format)
         parameters.update(extracted)
-        parsed.append((fields, raw, time_data, result["cluster_id"], parameters, category))
+        addresses = extract_addresses(message, category, parameters, fields.get("host"))
+        for role in ROLES:
+            if addresses[role]:
+                parameters[role] = addresses[role]
+        parsed.append((fields, raw, time_data, result["cluster_id"], parameters, category, addresses))
 
     events = []
-    for index, (fields, raw, time_data, cluster_id, parameters, category) in enumerate(parsed, start=1):
+    for index, (fields, raw, time_data, cluster_id, parameters, category, addresses) in enumerate(parsed, start=1):
         cluster = miner.drain.id_to_cluster[cluster_id]
         raw_time, local_time, utc_time, time_source, issue = time_data
         events.append(NormalizedEvent(
@@ -140,6 +145,7 @@ def parse_logs(
             host=fields.get("host"), component=fields["component"], message=fields["message"],
             template=cluster.get_template(), template_id=cluster_id,
             block_ids=list(dict.fromkeys(BLOCK.findall(fields["message"]))), parameters=parameters,
+            **addresses,
         ))
     return events
 

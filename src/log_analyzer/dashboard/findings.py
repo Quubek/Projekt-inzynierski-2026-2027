@@ -99,7 +99,7 @@ def render_finding_page() -> None:
             st.warning("Priorytet jest wstępny. Reguły i progi wymagają walidacji; wskazanie nie potwierdza incydentu.")
         render_finding_rules(finding)
         if finding.source == "ml":
-            st.caption(f"Wersja modelu: {finding.model_version or 'nieznana'} · Grupa: {finding.node or 'BlockID'}")
+            st.caption(f"Wersja modelu: {finding.model_version or 'nieznana'} · Grupa: {finding.details.get('group_id', 'Nie zapisano')}")
         else:
             st.caption(f"Wersja reguł: {finding.rules_version} · Węzeł: {finding.node or 'Nie ustalono'}")
         st.caption(f"Ocena modelu: {finding.score * 100:.1f}/100" if finding.score is not None else "Ocena modelu ML: niedostępna")
@@ -107,7 +107,7 @@ def render_finding_page() -> None:
             st.text(f"Czas: {finding.time_from} → {finding.time_to}")
             st.caption("Czas źródłowy bez określonej strefy." if finding.time_basis == "source_local" else "Czas przeliczony na UTC.")
         labels = {"observed_count": "Liczba zdarzeń", "threshold": "Próg reguły",
-                  "window_seconds": "Okno czasu (sekundy)", "block_count": "Liczba bloków"}
+                  "window_seconds": "Okno czasu (sekundy)", "block_count": "Liczba bloków", "group_id": "Grupa BlockID"}
         for key, value in finding.details.items():
             st.text(f"{labels.get(key, key)}: {value}")
         by_id = {event.event_id: event for event in analysis.events}

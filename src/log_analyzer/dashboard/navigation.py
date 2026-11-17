@@ -9,6 +9,7 @@ VIEWS = {
     "findings": "Wykrycia i anomalie",
     "history": "Historia raportów",
     "evaluation": "Ocena modeli",
+    "rules": "Katalog reguł",
 }
 
 

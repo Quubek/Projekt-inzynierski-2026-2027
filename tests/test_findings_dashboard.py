@@ -38,7 +38,10 @@ def test_findings_list_detail_and_report_roundtrip(connected_api, monkeypatch):
     backend, analysis = connected_api
     llm = MagicMock()
     llm.chat.return_value = SimpleNamespace(message=SimpleNamespace(content=json.dumps({
-        "podsumowanie": "Wyjątek podczas udostępniania bloku.", "rekomendacja": "Sprawdzić kontekst operacji.",
+        "obserwacja": "Wyjątek podczas udostępniania bloku.",
+        "powod_wskazania": "Reguła wskazuje komunikat o wyjątku.",
+        "ograniczenia_oceny": ["Przyczyna wyjątku nie jest znana."],
+        "zalecenia": ["Sprawdzić kontekst operacji.", "Przejrzeć powiązane logi węzła."],
     })))
     monkeypatch.setattr(ollama_klient, "Client", lambda **kwargs: llm)
     page = AppTest.from_file(str(APP), default_timeout=15)

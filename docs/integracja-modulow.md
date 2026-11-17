@@ -3,6 +3,9 @@
 ## Działająca ścieżka API i raportowania
 
 1. Dashboard wysyła logi do `POST /api/v1/analyze`.
+   Dla pliku przeglądarka wysyła surową treść do `POST /api/v1/analyze/file`:
+   odbiór fragmentami, do 2 GiB, maksymalnie 10 000 niepustych wpisów.
+   Import nie przechodzi przez pamięć `st.file_uploader`; oba wejścia tworzą `AnalyzeRequest`.
 2. Parser JB normalizuje wpisy, wydobywa szablony Drain3 i tworzy grupy.
 3. API zapisuje wynik w tabeli `analizy` w `runtime/raporty.sqlite3`.
 4. Użytkownik wybiera grupę lub wskazanie reguły i uruchamia raport przez
@@ -29,10 +32,25 @@ Przeglądanie raportów działa bez Ollamy. Błąd Ollamy nie usuwa zapisanej an
 Wejście LLM ograniczono do 20 oryginalnych przykładów i 6000 bajtów JSON.
 Przy większej liczbie danych generator tworzy agregaty wszystkich zdarzeń oraz dobiera
 przykłady, jawnie zapisując `llm_input_mode`, `llm_event_ids` i `llm_omitted_events`.
-Pełne oryginalne logi są w raporcie i bazie. LLM generuje tylko podsumowanie i rekomendację;
+Pełne oryginalne logi są w raporcie i bazie. LLM generuje obserwację, powód wskazania,
+listę ograniczeń i listę zaleceń, walidowane przez `OpisRaportu`;
 listę źródeł tworzy Python. Pojedynczy wpis, który nie mieści się w wejściu, nie jest przycinany.
 
+Wersja prompta `log-report-v2` definiuje role, zasady interpretacji i cztery sekcje treści.
+Instrukcja systemowa i dane logów są oddzielnymi wiadomościami. Raport zapisuje wersję
+prompta i model, a `tresc.schema_version` wynosi 2. Odczyt wspiera również dawny format
+dwóch pól tekstowych, bez migracji istniejących zapisów w SQLite.
+
 ## Reguły HDFS i jakość danych
+
+`NormalizedEvent` zawiera opcjonalne `source_ip`, `destination_ip`, `node_ip`, `target_ip`
+oraz listę `other_ips`. Moduł `parsing/addresses.py` przypisuje role na podstawie
+rozpoznanych komunikatów, walidując literały przez `ipaddress`. Drain3 nadal odpowiada
+za szablony, a nie za ustalanie ról IP. Nieznana rola nie jest zgadywana.
+Adresat polecenia HDFS nie jest utożsamiany z celem transmisji bloku.
+Dashboard potrafi odtworzyć role starszych analiz z parametrów i źródłowej treści,
+bez migracji zapisów. Definicje reguł w katalogu pochodzą z tego samego modułu
+`detection/catalog.py` co detektor; katalog nie zmienia historycznych opisów reguł.
 
 Reguły są w `src/log_analyzer/detection/rules.py`. To demonstracyjne warunki do walidacji:
 
@@ -56,15 +74,15 @@ Przy niejednoznaczności zmiany czasu UTC pozostaje puste z odpowiednią uwagą.
 Nowe analizy i wskazania są zapisywane w jednej transakcji w SQLite. Lista wykryć
 korzysta z filtrowania i stronicowania SQL. Brak tabeli wykryć w starszej bazie daje pustą listę.
 
-Odczyt dostarczonego `HDFS_2k.log` dał 2000 wpisów, 80 WARN, 2200 BlockID i 66 wskazań
+Odczyt dostarczonego `HDFS_2k.log` bez podłączonego artefaktu ML dał 2000 wpisów, 80 WARN, 2200 BlockID i 66 wskazań
 (64 połączone zbiory wyjątków oraz 2 żądania usunięcia po 100 bloków).
 To wynik działania reguł na próbce, a nie pomiar Precision/Recall ani liczba potwierdzonych anomalii.
 
 ## Kolejne kroki
 
-- Trening modelu HD na etykietowanym HDFS_v1 i walidacja wyników na danych testowych.
-- Większe importy przetwarzane stopniowo i stronicowanie zdarzeń po stronie API.
-  Obecny formularz nadal obsługuje do 2 MB i 5000 wpisów; ta zmiana nie udaje obsługi pełnego zbioru HDFS.
+- Ocena predykcji na odpowiednich, kompletnych sekwencjach HDFS; fragmenty logów nie zastępują zbioru oceny jakości.
+- Stronicowanie zdarzeń po stronie API oraz zadania importu w tle, jeśli będą potrzebne.
+  Obecnie odbiór pliku jest strumieniowy, ale analiza obejmuje ograniczoną paczkę do 10 000 wpisów.
 - Walidacja reguł, progów i jakości raportów na odpowiednich danych.
 
 ## Uruchomienie
@@ -139,6 +157,25 @@ jako etykiet. Predykcje ML pozostają niedostępne, jeśli zgodny artefakt nie
 znajduje się pod skonfigurowaną ścieżką.
 
 ## Weryfikacja
+
+Po scaleniu wersji HD i JF testy integracyjne sprawdzają również: wczytanie
+testowego pipeline'u TF-IDF, predykcję grup HDFS, zapis wskazania `source=ml`,
+generowanie raportu w schemacie 2 i odczyt z historii. Odpowiedź Ollamy jest
+kontrolowana, model jest małym artefaktem utworzonym w katalogu testowym.
+Osobny test odczytuje dostarczony plik metryk HD i sprawdza widok testowego F1
+oraz macierz pomyłek. Testy nie odtwarzają treningu HD ani oceny zbioru testowego.
+Dołączony `models/baseline.joblib` jest również wczytywany i sprawdzany przez API
+na przykładach HDFS. Zależności modelu przypięto w `requirements-api.txt`.
+
+Próba funkcjonalna na `HDFS_2k.log` z dołączonym modelem dała 2000 zdarzeń,
+2200 grup, 1994 grupy z predykcją i 206 nieocenionych. Status `partial` wynika
+z pominięcia grup bez zgodnych cech, m.in. wtórnych BlockID w wieloblokowych
+poleceniach. Próbka zawiera niepełne sekwencje; liczba wskazań nie jest miarą
+skuteczności i nie powinna być porównywana wprost z F1 pełnego zbioru HD.
+
+Wskazanie ML zapisuje `details.group_id` i identyfikatory wpisów rzeczywiście
+użytych do predykcji. Wpis wymieniający kilka bloków pozostaje widoczny
+w ich grupach, ale jego cechy są używane tylko dla pierwszego BlockID.
 
 Testy obejmują parsowanie, zapis analizy, wybór grupy, wygenerowanie raportu,
 zapis i odczyt z historii oraz przejście w dashboardzie. W testach odpowiedź Ollamy

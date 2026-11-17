@@ -4,14 +4,13 @@ from unittest.mock import MagicMock
 
 import httpx
 import pytest
-import streamlit
 from fastapi.testclient import TestClient
 from streamlit.testing.v1 import AppTest
 
 from log_analyzer.api.main import app as api_app
 from log_analyzer.contracts import MAX_LOG_LINES, AnalyzeRequest
 from log_analyzer.dashboard import api_client
-from log_analyzer.dashboard.analysis import MAX_INPUT_BYTES, decode_log_file, prepare_request
+from log_analyzer.dashboard.analysis import MAX_INPUT_BYTES, prepare_request
 from log_analyzer.dashboard.api_client import ReportsApi, ReportsApiError
 from log_analyzer.pipeline import analyze
 
@@ -57,7 +56,7 @@ def test_input_validation(text, log_format, message):
 
 def test_utf8_bom_blank_lines_and_source_content():
     original = sample()["logs"][0]
-    text = decode_log_file(("\ufeff\n" + original + "\n\n").encode("utf-8"))
+    text = "\ufeff\n" + original + "\n\n"
     request = prepare_request(text, "ssh")
     assert request.logs == [original]
 
@@ -69,14 +68,6 @@ def test_upload_limit_is_shared_with_api_and_accepts_two_thousand_lines():
         assert len(request.logs) == count
     with pytest.raises(ValueError):
         AnalyzeRequest(logs=[line] * (MAX_LOG_LINES + 1), log_format="hdfs")
-
-
-@pytest.mark.parametrize("content,message", [
-    (b"\xff\xfe", "UTF-8"), (b"x" * (MAX_INPUT_BYTES + 1), "2 MB"),
-])
-def test_invalid_file(content, message):
-    with pytest.raises(ValueError, match=message):
-        decode_log_file(content)
 
 
 def test_backend_parser_error_is_shown_to_user():
@@ -147,14 +138,39 @@ def test_failed_new_request_clears_old_result(monkeypatch):
     assert not page.dataframe
 
 
-def test_file_mode_uses_same_request_contract(monkeypatch):
+def test_file_mode_uploads_directly_to_public_api(monkeypatch):
     client = mock_analysis_api(monkeypatch)
-    content = "\n".join(sample()["logs"]).encode("utf-8")
-    upload = MagicMock()
-    upload.getvalue.return_value = content
-    monkeypatch.setattr(streamlit, "file_uploader", lambda *args, **kwargs: upload)
+    monkeypatch.setenv("API_PUBLIC_URL", "http://localhost:8000")
     page = analysis_page()
     page.radio(key="analysis_input_mode").set_value("Prześlij plik").run()
-    page.button(key="submit_analysis").click().run()
     assert not page.exception
-    assert client.analyze.call_args.args[0].logs == sample()["logs"]
+    assert page.get("iframe")[0].proto.src == "http://localhost:8000/import"
+    assert not page.get("file_uploader")
+    client.analyze.assert_not_called()
+
+
+def test_saved_file_analysis_opens_from_link_once_and_new_input_replaces_it(monkeypatch):
+    client = mock_analysis_api(monkeypatch)
+    result = client.analyze.return_value
+    client.analysis.return_value = result
+    page = AppTest.from_file(str(APP), default_timeout=15)
+    page.query_params.update(view="analysis", analysis_id=result.analysis_id)
+    page.run()
+    assert not page.exception and len(page.dataframe[0].value) == len(result.events)
+    client.analysis.assert_called_once_with(result.analysis_id)
+    page.run()
+    client.analysis.assert_called_once()
+    page.text_area(key="analysis_text").set_value("\n".join(sample()["logs"]))
+    page.button(key="submit_analysis").click().run()
+    assert not page.exception and "analysis_id" not in page.query_params
+    client.analyze.assert_called_once()
+
+
+def test_invalid_import_link_does_not_call_api_or_show_old_result(monkeypatch):
+    client = mock_analysis_api(monkeypatch)
+    page = AppTest.from_file(str(APP), default_timeout=15)
+    page.query_params.update(view="analysis", analysis_id="invalid")
+    page.session_state["analysis_result"] = client.analyze.return_value.model_dump(mode="json")
+    page.run()
+    assert not page.exception and not page.dataframe and page.error
+    client.analysis.assert_not_called()
