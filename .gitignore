@@ -11,6 +11,5 @@ artifacts/
 *.db
 /data/preprocessed/Event_traces.csv
 /data/preprocessed/anomaly_label.csv
-/models/baseline.joblib
 /models/model_metadata.json
 /models/split_*.csv

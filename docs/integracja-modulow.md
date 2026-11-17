@@ -80,7 +80,7 @@ To wynik działania reguł na próbce, a nie pomiar Precision/Recall ani liczba 
 
 ## Kolejne kroki
 
-- Sprawdzenie predykcji na docelowym artefakcie HD po osobnym przekazaniu `models/baseline.joblib`.
+- Ocena predykcji na odpowiednich, kompletnych sekwencjach HDFS; fragmenty logów nie zastępują zbioru oceny jakości.
 - Stronicowanie zdarzeń po stronie API oraz zadania importu w tle, jeśli będą potrzebne.
   Obecnie odbiór pliku jest strumieniowy, ale analiza obejmuje ograniczoną paczkę do 10 000 wpisów.
 - Walidacja reguł, progów i jakości raportów na odpowiednich danych.
@@ -163,8 +163,15 @@ testowego pipeline'u TF-IDF, predykcję grup HDFS, zapis wskazania `source=ml`,
 generowanie raportu w schemacie 2 i odczyt z historii. Odpowiedź Ollamy jest
 kontrolowana, model jest małym artefaktem utworzonym w katalogu testowym.
 Osobny test odczytuje dostarczony plik metryk HD i sprawdza widok testowego F1
-oraz macierz pomyłek. Testy nie odtwarzają treningu HD ani nie potwierdzają
-zgodności jego docelowego artefaktu, którego nie ma w repozytorium.
+oraz macierz pomyłek. Testy nie odtwarzają treningu HD ani oceny zbioru testowego.
+Dołączony `models/baseline.joblib` jest również wczytywany i sprawdzany przez API
+na przykładach HDFS. Zależności modelu przypięto w `requirements-api.txt`.
+
+Próba funkcjonalna na `HDFS_2k.log` z dołączonym modelem dała 2000 zdarzeń,
+2200 grup, 1994 grupy z predykcją i 206 nieocenionych. Status `partial` wynika
+z pominięcia grup bez zgodnych cech, m.in. wtórnych BlockID w wieloblokowych
+poleceniach. Próbka zawiera niepełne sekwencje; liczba wskazań nie jest miarą
+skuteczności i nie powinna być porównywana wprost z F1 pełnego zbioru HD.
 
 Wskazanie ML zapisuje `details.group_id` i identyfikatory wpisów rzeczywiście
 użytych do predykcji. Wpis wymieniający kilka bloków pozostaje widoczny

@@ -160,3 +160,18 @@ def test_hd_test_metrics_are_visible_without_model_or_retraining(monkeypatch):
     assert len(page.dataframe) == 2
     assert page.dataframe[0].value.iloc[0, 2] == 280
     assert page.dataframe[0].value.iloc[1, 1] == 1
+
+
+def test_repository_hdfs_artifact_loads_and_predictions_are_saved(monkeypatch):
+    path = ROOT / "models/baseline.joblib"
+    assert path.is_file()
+    monkeypatch.setenv("DETECTION_MODEL_PATH", str(path))
+    payload = json.loads((ROOT / "data/samples/hdfs_request.json").read_text(encoding="utf-8"))
+    backend = TestClient(app)
+    response = backend.post("/api/v1/analyze", json=payload)
+    assert response.status_code == 200
+    result = response.json()
+    assert result["detection_status"] == "completed"
+    assert all(group["ml_prediction"] in ("normal", "anomaly") for group in result["groups"])
+    assert all(0 <= group["ml_score"] <= 1 for group in result["groups"])
+    assert backend.get("/api/v1/analyses/" + result["analysis_id"]).json() == result
