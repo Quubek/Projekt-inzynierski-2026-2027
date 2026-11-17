@@ -3,6 +3,9 @@
 ## Działająca ścieżka API i raportowania
 
 1. Dashboard wysyła logi do `POST /api/v1/analyze`.
+   Dla pliku przeglądarka wysyła surową treść do `POST /api/v1/analyze/file`:
+   odbiór fragmentami, do 2 GiB, maksymalnie 10 000 niepustych wpisów.
+   Import nie przechodzi przez pamięć `st.file_uploader`; oba wejścia tworzą `AnalyzeRequest`.
 2. Parser JB normalizuje wpisy, wydobywa szablony Drain3 i tworzy grupy.
 3. API zapisuje wynik w tabeli `analizy` w `runtime/raporty.sqlite3`.
 4. Użytkownik wybiera grupę lub wskazanie reguły i uruchamia raport przez
@@ -27,10 +30,25 @@ Przeglądanie raportów działa bez Ollamy. Błąd Ollamy nie usuwa zapisanej an
 Wejście LLM ograniczono do 20 oryginalnych przykładów i 6000 bajtów JSON.
 Przy większej liczbie danych generator tworzy agregaty wszystkich zdarzeń oraz dobiera
 przykłady, jawnie zapisując `llm_input_mode`, `llm_event_ids` i `llm_omitted_events`.
-Pełne oryginalne logi są w raporcie i bazie. LLM generuje tylko podsumowanie i rekomendację;
+Pełne oryginalne logi są w raporcie i bazie. LLM generuje obserwację, powód wskazania,
+listę ograniczeń i listę zaleceń, walidowane przez `OpisRaportu`;
 listę źródeł tworzy Python. Pojedynczy wpis, który nie mieści się w wejściu, nie jest przycinany.
 
+Wersja prompta `log-report-v2` definiuje role, zasady interpretacji i cztery sekcje treści.
+Instrukcja systemowa i dane logów są oddzielnymi wiadomościami. Raport zapisuje wersję
+prompta i model, a `tresc.schema_version` wynosi 2. Odczyt wspiera również dawny format
+dwóch pól tekstowych, bez migracji istniejących zapisów w SQLite.
+
 ## Reguły HDFS i jakość danych
+
+`NormalizedEvent` zawiera opcjonalne `source_ip`, `destination_ip`, `node_ip`, `target_ip`
+oraz listę `other_ips`. Moduł `parsing/addresses.py` przypisuje role na podstawie
+rozpoznanych komunikatów, walidując literały przez `ipaddress`. Drain3 nadal odpowiada
+za szablony, a nie za ustalanie ról IP. Nieznana rola nie jest zgadywana.
+Adresat polecenia HDFS nie jest utożsamiany z celem transmisji bloku.
+Dashboard potrafi odtworzyć role starszych analiz z parametrów i źródłowej treści,
+bez migracji zapisów. Definicje reguł w katalogu pochodzą z tego samego modułu
+`detection/catalog.py` co detektor; katalog nie zmienia historycznych opisów reguł.
 
 Reguły są w `src/log_analyzer/detection/rules.py`. To demonstracyjne warunki do walidacji:
 
@@ -61,8 +79,8 @@ To wynik działania reguł na próbce, a nie pomiar Precision/Recall ani liczba 
 ## Kolejne kroki
 
 - Podłączenie modelu HD po udostępnieniu artefaktu i zgodnego przygotowania cech.
-- Większe importy przetwarzane stopniowo i stronicowanie zdarzeń po stronie API.
-  Obecny formularz nadal obsługuje do 2 MB i 5000 wpisów; ta zmiana nie udaje obsługi pełnego zbioru HDFS.
+- Stronicowanie zdarzeń po stronie API oraz zadania importu w tle, jeśli będą potrzebne.
+  Obecnie odbiór pliku jest strumieniowy, ale analiza obejmuje ograniczoną paczkę do 10 000 wpisów.
 - Walidacja reguł, progów i jakości raportów na odpowiednich danych.
 
 ## Uruchomienie

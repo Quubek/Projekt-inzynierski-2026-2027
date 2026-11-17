@@ -72,6 +72,28 @@ runtime/raporty.sqlite3
 
 Każde poprawne uruchomienie dodaje raport z nowym identyfikatorem.
 
+## Uporządkowana treść raportu
+
+Nowe raporty używają `tresc.schema_version: 2`. Model zwraca osobne pola:
+
+- `obserwacja` — najważniejsze fakty wynikające z przekazanych danych;
+- `powod_wskazania` — wyjaśnienie reguły/modelu albo informacja o ręcznym opisie bez detekcji;
+- `ograniczenia_oceny` — lista konkretnych ograniczeń (może być pusta);
+- `zalecenia` — lista dwóch lub trzech czynności weryfikacyjnych.
+
+Dashboard wyświetla stałe sekcje: Obserwacja, Powód wskazania, Ograniczenia oceny
+i Zalecane sprawdzenia. Nagłówki i numerację zapewnia aplikacja, a nie tekst modelu.
+Lista `kluczowe_zdarzenia` nadal powstaje z oryginalnych logów w Pythonie.
+
+Instrukcja systemowa jest w `src/log_analyzer/reporting/prompt.py`.
+Logi są przesyłane osobno jako dane użytkownika, a model otrzymuje schemat czterech pól.
+Nowe raporty zapisują `prompt_version` i `llm_model`, ułatwiając porównanie wyników.
+Temperatura pozostaje 0.1, kontekst 8192, a model to `qwen3:4b-instruct`.
+
+Starsze raporty z polami `podsumowanie` i `rekomendacja` są nadal odczytywane
+w oryginalnym układzie, bez przepisywania danych w SQLite. Historia prezentuje
+obserwację dla nowych raportów, a wcześniejsze podsumowanie dla starych.
+
 ## Odczyt istniejącego raportu
 
 Skopiuj identyfikator z komunikatu `Zapisano raport`
@@ -156,7 +178,9 @@ Walidacja Pydantic sprawdza strukturę danych.
 Nie gwarantuje poprawności merytorycznej opisu ani rekomendacji LLM.
 
 Metadane raportu i lista kluczowych zdarzeń są tworzone w Pythonie.
-Podsumowanie i rekomendacja pochodzą z modelu.
+Obserwacja, powód wskazania, ograniczenia oceny i zalecenia pochodzą z modelu.
+Poprawny schemat i stały układ nie gwarantują poprawności tych treści;
+ich jakość wymaga osobnej oceny na przygotowanych przypadkach.
 
 Baza w folderze `runtime/` jest pomijana przez Git.
 Każdy członek zespołu tworzy własną lokalną bazę.

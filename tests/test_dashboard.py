@@ -42,7 +42,7 @@ def test_home_tiles_do_not_load_history(monkeypatch):
     api = mock_api(monkeypatch)
     app = AppTest.from_file(str(APP)).run(timeout=15)
     assert not app.exception
-    assert app.title[0].value == "Co chcesz zrobić?"
+    assert app.title[0].value == "Analizator logów"
     assert app.button(key="tile_history")
     assert app.button(key="tile_analysis")
     assert app.button(key="tile_evaluation")
@@ -65,7 +65,7 @@ def test_history_is_a_separate_view_without_report_content(monkeypatch):
     api.report.assert_not_called()
     app.button(key="back_to_home").click().run()
     assert not app.exception
-    assert app.title[0].value == "Co chcesz zrobić?"
+    assert app.title[0].value == "Analizator logów"
 
 
 def test_direct_report_link_opens_detail_and_download(monkeypatch):
@@ -188,4 +188,4 @@ def test_report_can_return_to_analysis(monkeypatch):
     assert app.title[0].value == "Analiza logów"
     app.button(key="back_to_home").click().run()
     assert not app.exception
-    assert app.title[0].value == "Co chcesz zrobić?"
+    assert app.title[0].value == "Analizator logów"

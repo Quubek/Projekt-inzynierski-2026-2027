@@ -32,7 +32,7 @@ def test_historical_report_tooltip_uses_saved_rule_description(monkeypatch):
     page.run()
     assert not page.exception
     tooltip = page.get("popover")[0].proto.popover
-    assert tooltip.label == "Żądanie usunięcia wielu bloków"
+    assert tooltip.label == "**Żądanie usunięcia wielu bloków**"
     assert "50" in tooltip.help and "999" not in tooltip.help
     assert any(finding.rule_definitions[0].description == item.value for item in page.text)
 

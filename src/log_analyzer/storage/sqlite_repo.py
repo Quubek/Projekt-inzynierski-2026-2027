@@ -223,6 +223,6 @@ def pobierz_historie_raportow(
             "created_at": row["created_at"],
             "host": row["host"],
             "liczba_zdarzen": report.get("liczba_zdarzen"),
-            "podsumowanie": report.get("tresc", {}).get("podsumowanie", ""),
+            "podsumowanie": report.get("tresc", {}).get("obserwacja") or report.get("tresc", {}).get("podsumowanie", ""),
         })
     return history

@@ -7,14 +7,14 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator
 
-LogLine = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=10000)]
-MAX_LOG_LINES = 5000
+MAX_LOG_LINE_CHARS = 10000
+MAX_LOG_LINES = 10000
+LogLine = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=MAX_LOG_LINE_CHARS)]
 
 
-class AnalyzeRequest(BaseModel):
+class AnalysisSourceOptions(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    logs: list[LogLine] = Field(min_length=1, max_length=MAX_LOG_LINES)
     log_format: Literal["hdfs", "ssh"] = "hdfs"
     source_timezone: str | None = Field(default=None, max_length=100)
     source_year: int | None = Field(default=None, ge=1900, le=2100)
@@ -29,6 +29,16 @@ class AnalyzeRequest(BaseModel):
             except (ZoneInfoNotFoundError, ValueError) as error:
                 raise ValueError("Podaj poprawną strefę źródła, np. Europe/Warsaw lub UTC.") from error
         return value
+
+
+class AnalyzeRequest(AnalysisSourceOptions):
+    logs: list[LogLine] = Field(min_length=1, max_length=MAX_LOG_LINES)
+
+
+class AnalysisImportResult(BaseModel):
+    analysis_id: str
+    event_count: int
+    finding_count: int
 
 
 class NormalizedEvent(BaseModel):
@@ -49,6 +59,11 @@ class NormalizedEvent(BaseModel):
     timestamp_local: str | None = None
     timezone_source: Literal["log", "configuration", "unknown"] = "unknown"
     time_issue: str | None = None
+    source_ip: str | None = None
+    destination_ip: str | None = None
+    node_ip: str | None = None
+    target_ip: str | None = None
+    other_ips: list[str] = Field(default_factory=list)
 
 
 class EventGroup(BaseModel):
@@ -121,7 +136,28 @@ class GenerateReportRequest(BaseModel):
         return self
 
 
+ReportText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+EvidenceText = Annotated[str, StringConstraints(strip_whitespace=False, min_length=1)]
+
+
+class OpisRaportu(BaseModel):
+    """Pola generowane przez LLM; nagłówki i numerację zapewnia aplikacja."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    obserwacja: ReportText = Field(description="Najważniejsze fakty wynikające z przekazanych zdarzeń.")
+    powod_wskazania: ReportText = Field(description="Wyjaśnienie przekazanego wykrycia albo informacja o ręcznym opisie bez detekcji.")
+    ograniczenia_oceny: list[ReportText] = Field(max_length=5, description="Konkretne braki danych i granice wnioskowania; pusta lista, gdy nie stwierdzono dodatkowych ograniczeń.")
+    zalecenia: list[ReportText] = Field(min_length=2, max_length=3, description="Dwa lub trzy konkretne zalecenia weryfikacyjne, bez numeracji w treści elementów.")
+
+
+class UstrukturyzowanaTrescRaportu(OpisRaportu):
+    schema_version: Literal[2] = 2
+    kluczowe_zdarzenia: list[EvidenceText] = Field(min_length=1)
+
+
 class TrescRaportu(BaseModel):
+    """Starszy format zachowany do odczytu istniejących raportów."""
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     podsumowanie: str = Field(min_length=1)
@@ -140,7 +176,7 @@ class RaportZdarzen(BaseModel):
     liczba_zdarzen_bez_czasu: int = Field(ge=0)
     czas_od: datetime | None
     czas_do: datetime | None
-    tresc: TrescRaportu
+    tresc: UstrukturyzowanaTrescRaportu | TrescRaportu
     analysis_id: str | None = None
     group_id: str | None = None
     generation_mode: Literal["manual"] = "manual"
@@ -150,6 +186,8 @@ class RaportZdarzen(BaseModel):
     llm_input_mode: Literal["full", "aggregated"] = "full"
     llm_event_ids: list[str] = Field(default_factory=list)
     llm_omitted_events: int = Field(default=0, ge=0)
+    prompt_version: str | None = None
+    llm_model: str | None = None
 
 
 class ReportSummary(BaseModel):
